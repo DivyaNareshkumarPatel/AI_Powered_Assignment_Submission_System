@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const pool = require('./config/db.js');
+const authRoutes = require('./routes/authRoutes');
 
 require('dotenv').config();
 
@@ -13,6 +14,8 @@ app.use(express.json());
 app.get('/', (req, res) => {
     res.json({ message: "Backend is running and ready!" });
 });
+
+app.use('/api/auth', authRoutes);
 
 app.get('/db-test', async (req, res) => {
     try {
