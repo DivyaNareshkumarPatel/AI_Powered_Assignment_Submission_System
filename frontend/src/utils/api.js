@@ -41,4 +41,31 @@ export const loginUser = async (enrollmentNumber, password) => {
     return response.data;
 };
 
+export const fetchTeacherAllocations = async () => {
+    const response = await api.get('/teacher/allocations');
+    return response.data;
+};
+
+export const fetchStudentsByClass = async (classId) => {
+    const response = await api.get(`/teacher/classes/${classId}/students`);
+    return response.data;
+};
+
+export const createAssignment = async (formData) => {
+    const response = await api.post('/teacher/assignments', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+};
+
+export const fetchTeacherAssignments = async () => {
+    const response = await api.get('/teacher/assignments');
+    return response.data;
+};
+
+export const fetchSubmissions = async (assignmentId) => {
+    const response = await api.get(`/teacher/assignments/${assignmentId}/submissions`);
+    return response.data;
+};
+
 export default api;
