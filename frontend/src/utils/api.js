@@ -68,4 +68,21 @@ export const fetchSubmissions = async (assignmentId) => {
     return response.data;
 };
 
+export const fetchPendingAssignments = async () => {
+    const response = await api.get('/student/pending');
+    return response.data;
+};
+
+export const fetchStudentHistory = async () => {
+    const response = await api.get('/student/history');
+    return response.data;
+};
+
+export const submitAssignment = async (formData) => {
+    const response = await api.post('/student/submit', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+};
+
 export default api;
