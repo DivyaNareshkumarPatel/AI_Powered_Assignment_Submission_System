@@ -170,6 +170,27 @@ const updateSubmissionGrade = async (req, res) => {
     }
 };
 
+// === GET STUDENTS BY CLASS (Fixed for your Schema) ===
+const getStudentsByClass = async (req, res) => {
+    try {
+        const { class_id } = req.params;
+
+        // QUERY EXPLANATION:
+        // Your 'users' table has a 'class_id' column directly.
+        // We select all users who have this class_id and are students.
+        const result = await pool.query(
+            `SELECT user_id, name, enrollment_number, email 
+             FROM users 
+             WHERE class_id = $1 AND role = 'STUDENT'`,
+            [class_id]
+        );
+
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Error fetching students:", err.message);
+        res.status(500).send("Server Error");
+    }
+};
 module.exports = { 
     getTeacherAllocations, 
     createAssignment, 
@@ -177,5 +198,6 @@ module.exports = {
     getSubmissionStats,
     getSubmissionsForAssignment,
     updateSubmissionGrade,
-    getSubmissionDetails
+    getSubmissionDetails,
+    getStudentsByClass
 };

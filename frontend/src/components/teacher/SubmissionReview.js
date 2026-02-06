@@ -8,7 +8,6 @@ export default function SubmissionReview() {
   const [allAssignments, setAllAssignments] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   
-  // Filter States
   const [selectedClassId, setSelectedClassId] = useState('');
   const [selectedSubjectId, setSelectedSubjectId] = useState('');
   const [selectedAssignmentId, setSelectedAssignmentId] = useState('');

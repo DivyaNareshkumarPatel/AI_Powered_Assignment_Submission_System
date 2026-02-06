@@ -6,10 +6,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { User, Lock, LogIn, Loader2 } from 'lucide-react';
 import { loginUser } from '@/utils/api';
+import { useAuth } from '@/context/AuthContext'; // Import useAuth
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { login } = useAuth(); // Destructure login from context
   
   const [enrollment, setEnrollment] = useState('');
   const [password, setPassword] = useState('');
@@ -32,11 +34,10 @@ export default function LoginPage() {
     try {
       const data = await loginUser(enrollment, password);
       
-      // 1. Store Token
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify({ name: data.name, role: data.role }));
+      // 1. Update Auth Context (Handles localStorage internally)
+      login({ name: data.name, role: data.role }, data.token);
 
-      // 2. Redirect based on Role (We will build these pages next)
+      // 2. Redirect based on Role
       if (data.role === 'TEACHER') {
         router.push('/dashboard/teacher');
       } else {

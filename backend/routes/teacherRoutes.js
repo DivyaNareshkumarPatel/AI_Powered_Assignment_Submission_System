@@ -9,7 +9,8 @@ const {
     getSubmissionStats,
     getSubmissionsForAssignment,
     updateSubmissionGrade,
-    getSubmissionDetails
+    getSubmissionDetails,
+    getStudentsByClass
 } = require('../controllers/teacherController');
 
 // Get Classes
@@ -27,5 +28,6 @@ router.get('/stats', auth, getSubmissionStats);
 router.get('/assignments/:assignment_id/submissions', auth, getSubmissionsForAssignment);
 router.put('/submissions/:submission_id/grade', auth, updateSubmissionGrade);
 router.get('/submissions/:submission_id/details', auth, getSubmissionDetails);
+router.get('/classes/:class_id/students', getStudentsByClass);
 
 module.exports = router;

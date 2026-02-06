@@ -106,4 +106,33 @@ const loginUser = async (req, res) => {
     }
 };
 
-module.exports = { lookupUser, registerUser, loginUser };
+const uploadFace = async (req, res) => {
+    const { enrollment_number } = req.body;
+    const file = req.file;
+
+    if (!file) {
+        return res.status(400).json({ error: "No image captured." });
+    }
+
+    try {
+        // Construct file URL (adjust domain as needed)
+        const fileUrl = `http://localhost:5000/uploads/${file.filename}`;
+
+        const result = await pool.query(
+            'UPDATE users SET face_image_url = $1 WHERE enrollment_number = $2 RETURNING name, face_image_url',
+            [fileUrl, enrollment_number]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "User not found." });
+        }
+
+        res.json({ message: "Face registered successfully!", data: result.rows[0] });
+
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send("Server Error");
+    }
+};
+
+module.exports = { lookupUser, registerUser, loginUser, uploadFace };

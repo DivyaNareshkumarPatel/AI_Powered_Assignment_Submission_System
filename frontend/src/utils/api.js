@@ -104,4 +104,15 @@ export const fetchStudentSubmissionDetails = async (submissionId) => {
     return response.data;
 };
 
+export const uploadFace = async (enrollmentNumber, imageBlob) => {
+    const formData = new FormData();
+    formData.append('enrollment_number', enrollmentNumber);
+    formData.append('face_image', imageBlob, 'face_capture.jpg');
+
+    const response = await api.post('/auth/upload-face', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+};
+
 export default api;
