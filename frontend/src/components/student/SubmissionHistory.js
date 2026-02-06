@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { fetchStudentHistory } from '@/utils/api';
-import { CheckCircle, AlertCircle, Clock, Loader2 } from 'lucide-react';
+import { CheckCircle, AlertCircle, Clock, Loader2, Eye } from 'lucide-react';
 
 export default function SubmissionHistory() {
   const [submissions, setSubmissions] = useState([]);
@@ -32,6 +32,7 @@ export default function SubmissionHistory() {
                 <th className="p-5 text-xs font-bold text-gray-500 uppercase">Date</th>
                 <th className="p-5 text-xs font-bold text-gray-500 uppercase">Status</th>
                 <th className="p-5 text-xs font-bold text-gray-500 uppercase">Score</th>
+                <th className="p-5 text-xs font-bold text-gray-500 uppercase">My Work</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -45,6 +46,16 @@ export default function SubmissionHistory() {
                   </td>
                   <td className="p-5 font-bold text-slate-800">
                     {s.final_score ? s.final_score : <span className="text-gray-300">-</span>}
+                  </td>
+                  <td className="p-5">
+                    {/* BUTTON TO REOPEN OWN FILE */}
+                    <button 
+                        onClick={() => window.open(s.file_url, '_blank')}
+                        className="text-slate-600 hover:text-slate-900 transition flex items-center gap-2 text-sm"
+                        title="View My Submission"
+                    >
+                        <Eye size={18} /> View
+                    </button>
                   </td>
                 </tr>
               ))}

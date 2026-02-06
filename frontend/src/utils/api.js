@@ -85,4 +85,23 @@ export const submitAssignment = async (formData) => {
     return response.data;
 };
 
+export const updateSubmissionGrade = async (submissionId, grade, remarks) => {
+    // This sends the teacher's manual grade to the server
+    const response = await api.put(`/teacher/submissions/${submissionId}/grade`, { 
+        final_score: grade,
+        teacher_remarks: remarks 
+    });
+    return response.data;
+};
+
+export const fetchSubmissionDetails = async (submissionId) => {
+    const response = await api.get(`/teacher/submissions/${submissionId}/details`);
+    return response.data;
+};
+
+export const fetchStudentSubmissionDetails = async (submissionId) => {
+    const response = await api.get(`/student/submissions/${submissionId}/details`);
+    return response.data;
+};
+
 export default api;
