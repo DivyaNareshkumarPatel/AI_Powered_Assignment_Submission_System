@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getStudentSubmissions } from '@/utils/api'; // Ensure this fetches your past submissions
+import { fetchStudentHistory } from '@/utils/api'; // Ensure this fetches your past submissions
 import { fetchStudentSubmissionDetails } from '@/utils/api';
 import { Loader2, CheckCircle, ShieldAlert, Video, MessageSquare, Bot, Eye, X, Award } from 'lucide-react';
 import PDFViewer from '@/components/common/PDFViewer';
@@ -22,7 +22,7 @@ export default function StudentResults() {
     try {
       // You might need to ensure this API function exists in your api.js
       // It should fetch "SELECT * FROM submissions WHERE student_id = ..."
-      const data = await getStudentSubmissions(); 
+      const data = await fetchStudentHistory(); 
       setSubmissions(data || []);
     } catch (err) {
       console.error(err);

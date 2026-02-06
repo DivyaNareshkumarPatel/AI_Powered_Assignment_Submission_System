@@ -1,6 +1,6 @@
 'use client';
 
-import { LayoutDashboard, History, LogOut } from 'lucide-react';
+import { LayoutDashboard, History, LogOut, Award } from 'lucide-react'; // 1. Import Award Icon
 import { useRouter } from 'next/navigation';
 
 export default function Sidebar({ activeTab, setActiveTab }) {
@@ -26,18 +26,28 @@ export default function Sidebar({ activeTab, setActiveTab }) {
         
         <nav className="space-y-2">
             <button 
-                onClick={() => setActiveTab && setActiveTab('pending')}
+                onClick={() => setActiveTab('pending')}
                 className={`flex items-center gap-3 w-full p-3.5 rounded-xl text-sm font-medium transition cursor-pointer
                 ${activeTab === 'pending' ? 'bg-slate-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
             >
                 <LayoutDashboard size={18} /> My Assignments
             </button>
+
             <button 
-                onClick={() => setActiveTab && setActiveTab('history')}
+                onClick={() => setActiveTab('history')}
                 className={`flex items-center gap-3 w-full p-3.5 rounded-xl text-sm font-medium transition cursor-pointer
                 ${activeTab === 'history' ? 'bg-slate-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
             >
                 <History size={18} /> Submission History
+            </button>
+
+            {/* === 2. ADD THIS NEW BUTTON === */}
+            <button 
+                onClick={() => setActiveTab('results')}
+                className={`flex items-center gap-3 w-full p-3.5 rounded-xl text-sm font-medium transition cursor-pointer
+                ${activeTab === 'results' ? 'bg-slate-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+            >
+                <Award size={18} /> My Results
             </button>
         </nav>
       </div>
