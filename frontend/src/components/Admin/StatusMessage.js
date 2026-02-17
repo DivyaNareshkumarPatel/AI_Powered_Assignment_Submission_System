@@ -7,13 +7,13 @@ const StatusMessage = ({ message, error }) => {
   return (
     <div className="mb-6">
       {message && (
-        <div className="p-4 bg-green-50 text-green-700 rounded-lg flex items-center border border-green-200">
-          <CheckCircle className="mr-2" size={20} /> {message}
+        <div className="p-4 bg-white border-2 border-black text-black flex items-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+          <CheckCircle className="mr-3" size={20} /> <span className="font-bold">{message}</span>
         </div>
       )}
       {error && (
-        <div className="p-4 bg-red-50 text-red-700 rounded-lg flex items-center border border-red-200">
-          <AlertCircle className="mr-2" size={20} /> {error}
+        <div className="p-4 bg-black text-white border-2 border-black flex items-center shadow-[4px_4px_0px_0px_rgba(150,150,150,1)]">
+          <AlertCircle className="mr-3" size={20} /> <span className="font-bold">{error}</span>
         </div>
       )}
     </div>

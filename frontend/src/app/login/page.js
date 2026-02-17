@@ -1,4 +1,3 @@
-// src/app/login/page.js
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -6,12 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { User, Lock, LogIn, Loader2 } from 'lucide-react';
 import { loginUser } from '@/utils/api';
-import { useAuth } from '@/context/AuthContext'; // Import useAuth
+import { useAuth } from '@/context/AuthContext';
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { login } = useAuth(); // Destructure login from context
+  const { login } = useAuth();
   
   const [enrollment, setEnrollment] = useState('');
   const [password, setPassword] = useState('');
@@ -34,18 +33,28 @@ export default function LoginPage() {
     try {
       const data = await loginUser(enrollment, password);
       
-      // 1. Update Auth Context (Handles localStorage internally)
-      login({ name: data.name, role: data.role }, data.token);
+      // Handle potential API response structure differences
+      // Some backends return { user: {...}, token: ... } others return flat objects
+      const userData = data.user || data; 
+      const token = data.token;
+      
+      // 1. Update Auth Context
+      login(userData, token);
 
-      // 2. Redirect based on Role
-      if (data.role === 'TEACHER') {
+      // 2. Dynamic Redirect based on Role
+      const role = userData.role ? userData.role.toUpperCase() : 'STUDENT';
+
+      if (role === 'ADMIN') {
+        router.push('/dashboard/admin');
+      } else if (role === 'TEACHER') {
         router.push('/dashboard/teacher');
       } else {
         router.push('/dashboard/student');
       }
 
     } catch (err) {
-      setError(err.response?.data?.error || 'Invalid credentials');
+      console.error("Login Error:", err);
+      setError(err.response?.data?.msg || err.response?.data?.error || 'Invalid credentials');
     } finally {
       setLoading(false);
     }

@@ -207,4 +207,35 @@ export const bulkUploadUsers = async (file, additionalData) => {
     return response.data;
 };
 
+export const createInstitute = async (data) => {
+    const response = await api.post('/admin/institutes', data);
+    return response.data;
+};
+
+export const getInstitutes = async () => {
+    const response = await api.get('/admin/institutes');
+    return response.data;
+};
+
+// --- DEPARTMENTS ---
+export const createDepartment = async (data) => {
+    const response = await api.post('/admin/departments', data);
+    return response.data;
+};
+
+export const getDepartments = async () => {
+    const response = await api.get('/admin/departments');
+    return response.data;
+};
+
+export const updateYearStatus = async (id, status) => {
+    const response = await api.put(`/admin/years/${id}/status`, { is_active: status });
+    return response.data;
+};
+
+export const updateSemesterStatus = async (id, status) => {
+    const response = await api.put(`/admin/semesters/${id}/status`, { is_active: status });
+    return response.data;
+};
+
 export default api;
