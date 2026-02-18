@@ -1,7 +1,8 @@
 import React from 'react';
 import { 
   LayoutDashboard, Calendar, BookOpen, Users, 
-  GraduationCap, Layers, Upload, Building, Library 
+  GraduationCap, Layers, Upload, Building, Library,
+  UserCheck // <--- Imported for Teachers
 } from 'lucide-react';
 
 const Sidebar = ({ activeTab, setActiveTab }) => {
@@ -26,16 +27,24 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
         </h1>
       </div>
       <nav className="p-4 space-y-1">
-        {/* NEW ITEMS */}
+        
+        {/* ORGANIZATION */}
         <SidebarItem id="institutes" label="Institutes" icon={Building} />
         <SidebarItem id="departments" label="Departments" icon={Library} />
         
         <div className="my-2 border-t-2 border-gray-200"></div>
 
+        {/* ACADEMICS */}
         <SidebarItem id="years" label="Academic Years" icon={Calendar} />
         <SidebarItem id="semesters" label="Semesters" icon={Layers} />
         <SidebarItem id="subjects" label="Subjects" icon={BookOpen} />
         <SidebarItem id="classes" label="Classes" icon={GraduationCap} />
+        
+        <div className="my-2 border-t-2 border-gray-200"></div>
+
+        {/* PEOPLE & DATA */}
+        <SidebarItem id="teachers" label="Teacher Data" icon={UserCheck} /> {/* NEW */}
+        <SidebarItem id="students" label="Student Data" icon={Users} />     {/* NEW */}
         <SidebarItem id="allocations" label="Allocations" icon={Users} />
         <SidebarItem id="users" label="Bulk Upload" icon={Upload} />
       </nav>

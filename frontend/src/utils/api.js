@@ -177,8 +177,13 @@ export const getClasses = async () => {
 };
 
 // 5. Allocations & Teachers
-export const getTeachers = async () => {
-    const response = await api.get('/admin/teachers');
+export const getTeachers = async (instituteId = null) => {
+    // If instituteId is provided, append it to query string
+    const url = instituteId 
+        ? `/admin/teachers?institute_id=${instituteId}` 
+        : '/admin/teachers';
+        
+    const response = await api.get(url);
     return response.data;
 };
 
@@ -225,6 +230,11 @@ export const createDepartment = async (data) => {
 
 export const getDepartments = async () => {
     const response = await api.get('/admin/departments');
+    return response.data;
+};
+
+export const getStudents = async () => {
+    const response = await api.get('/admin/students');
     return response.data;
 };
 

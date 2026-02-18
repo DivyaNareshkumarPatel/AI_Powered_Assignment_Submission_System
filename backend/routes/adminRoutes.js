@@ -46,6 +46,7 @@ router.get('/classes', adminController.getClasses);
 // ==========================================
 router.post('/allocations', adminController.allocateSubject);
 router.get('/teachers', adminController.getTeachers);
+router.get('/students', adminController.getStudents);
 
 // ==========================================
 // 6. BULK UPLOAD

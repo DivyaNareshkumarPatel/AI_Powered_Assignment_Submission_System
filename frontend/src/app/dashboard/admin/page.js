@@ -3,24 +3,28 @@
 import React, { useState, useEffect } from 'react';
 import { 
   getYears, getSemesters, getSubjects, getClasses, getTeachers, 
-  getInstitutes, getDepartments // Import new API calls
+  getInstitutes, getDepartments 
 } from '@/utils/api';
 
 import Sidebar from '@/components/Admin/Sidebar';
 import StatusMessage from '@/components/Admin/StatusMessage';
+
+// Forms
 import AcademicYearForm from '@/components/Admin/forms/AcademicYearForm';
 import SemesterForm from '@/components/Admin/forms/SemesterForm';
 import SubjectForm from '@/components/Admin/forms/SubjectForm';
 import ClassForm from '@/components/Admin/forms/ClassForm';
 import AllocationForm from '@/components/Admin/forms/AllocationForm';
 import BulkUploadForm from '@/components/Admin/forms/BulkUploadForm';
-
-// Import New Forms
 import InstituteForm from '@/components/Admin/forms/InstituteForm';
 import DepartmentForm from '@/components/Admin/forms/DepartmentForm';
 
+// New Data Views
+import TeacherList from '@/components/Admin/views/TeacherList';
+import StudentList from '@/components/Admin/views/StudentList';
+
 const AdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState('institutes'); // Start at institutes
+  const [activeTab, setActiveTab] = useState('institutes'); 
   const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -82,18 +86,20 @@ const AdminDashboard = () => {
 
         <div className="bg-white border-2 border-black p-8 max-w-4xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
           
-          {/* NEW FORMS */}
+          {/* FORMS */}
           {activeTab === 'institutes' && <InstituteForm onSuccess={handleSuccess} onError={handleError} institutes={institutes} />}
-          
           {activeTab === 'departments' && <DepartmentForm onSuccess={handleSuccess} onError={handleError} institutes={institutes} departments={departments} />}
-
-          {/* EXISTING FORMS */}
+          
           {activeTab === 'years' && <AcademicYearForm onSuccess={handleSuccess} onError={handleError} years={years} />}
           {activeTab === 'semesters' && <SemesterForm onSuccess={handleSuccess} onError={handleError} years={years} />}
           {activeTab === 'subjects' && <SubjectForm onSuccess={handleSuccess} onError={handleError} />}
           {activeTab === 'classes' && <ClassForm onSuccess={handleSuccess} onError={handleError} semesters={semesters} />}
           {activeTab === 'allocations' && <AllocationForm onSuccess={handleSuccess} onError={handleError} teachers={teachers} subjects={subjects} classes={classes} />}
           {activeTab === 'users' && <BulkUploadForm onSuccess={handleSuccess} onError={handleError} />}
+
+          {/* NEW DATA VIEWS (No forms, just lists) */}
+          {activeTab === 'teachers' && <TeacherList />}
+          {activeTab === 'students' && <StudentList />}
 
         </div>
       </main>

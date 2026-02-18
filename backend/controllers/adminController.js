@@ -38,7 +38,6 @@ const createDepartment = async (req, res) => {
 
 const getDepartments = async (req, res) => {
     try {
-        // Returns departments with their institute name
         const result = await pool.query(`
             SELECT d.*, i.name as institute_name 
             FROM departments d 
@@ -55,10 +54,8 @@ const getDepartments = async (req, res) => {
 
 const createAcademicYear = async (req, res) => {
     try {
-        // Updated to include department_id
         const { name, start_date, end_date, department_id } = req.body;
         
-        // Deactivate other years for this department (Optional logic)
         if (department_id) {
             await pool.query("UPDATE academic_years SET is_active = false WHERE department_id = $1", [department_id]);
         }
@@ -74,7 +71,6 @@ const createAcademicYear = async (req, res) => {
 
 const getAcademicYears = async (req, res) => {
     try {
-        // Can filter by department via query param if needed
         const { department_id } = req.query;
         let query = "SELECT * FROM academic_years";
         let params = [];
@@ -93,7 +89,6 @@ const getAcademicYears = async (req, res) => {
 
 const createSemester = async (req, res) => {
     try {
-        // Updated to include department_id
         const { academic_year_id, name, type, department_id } = req.body;
         const result = await pool.query(
             `INSERT INTO semesters (academic_year_id, name, type, department_id) 
@@ -137,16 +132,11 @@ const getSemesters = async (req, res) => {
 
 const createSubject = async (req, res) => {
   try {
-    // 1. Destructure institute_id from the request body
     const { name, code, institute_id } = req.body;
-
-    // 2. Insert it into the database
-    // Make sure your SQL query includes the new column
     const newSubject = await pool.query(
       "INSERT INTO subjects (name, code, institute_id) VALUES ($1, $2, $3) RETURNING *",
       [name, code, institute_id]
     );
-
     res.json(newSubject.rows[0]);
   } catch (err) {
     console.error(err.message);
@@ -156,9 +146,17 @@ const createSubject = async (req, res) => {
 
 const getSubjects = async (req, res) => {
   try {
-    // Optionally join with institutes to get the name directly, 
-    // or just return the raw rows (frontend maps the name)
-    const allSubjects = await pool.query("SELECT * FROM subjects ORDER BY name ASC");
+    const { institute_id } = req.query;
+    let query = "SELECT * FROM subjects";
+    let params = [];
+
+    if (institute_id) {
+      query += " WHERE institute_id = $1";
+      params.push(institute_id);
+    }
+
+    query += " ORDER BY name ASC";
+    const allSubjects = await pool.query(query, params);
     res.json(allSubjects.rows);
   } catch (err) {
     console.error(err.message);
@@ -168,9 +166,7 @@ const getSubjects = async (req, res) => {
 
 const createClass = async (req, res) => {
     try {
-        // Updated to include department_id
         const { name, semester_id, department_id } = req.body;
-        
         const result = await pool.query(
             "INSERT INTO classes (name, semester_id, department_id) VALUES ($1, $2, $3) RETURNING *",
             [name, semester_id, department_id]
@@ -185,15 +181,21 @@ const createClass = async (req, res) => {
 const getClasses = async (req, res) => {
     try {
         const { department_id } = req.query;
-        let query = "SELECT * FROM classes";
+        
+        // JOIN departments to get the institute_id for every class
+        let query = `
+            SELECT c.*, d.name as department_name, d.institute_id 
+            FROM classes c
+            JOIN departments d ON c.department_id = d.department_id
+        `;
         let params = [];
 
         if (department_id) {
-            query += " WHERE department_id = $1";
+            query += ` WHERE c.department_id = $1`;
             params.push(department_id);
         }
 
-        query += " ORDER BY name";
+        query += " ORDER BY c.name";
         const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -217,14 +219,18 @@ const allocateSubject = async (req, res) => {
 
 const getTeachers = async (req, res) => {
     try {
-        const { department_id } = req.query;
-        let query = "SELECT user_id, name, enrollment_number FROM users WHERE role = 'TEACHER'";
+        const { institute_id } = req.query;
+        
+        // UPDATED QUERY: Added 'email' and 'institute_id' to SELECT
+        let query = "SELECT user_id, name, enrollment_number, email, institute_id FROM users WHERE role = 'TEACHER'";
         let params = [];
 
-        if (department_id) {
-            query += " AND department_id = $1";
-            params.push(department_id);
+        if (institute_id) {
+            query += " AND institute_id = $1";
+            params.push(institute_id);
         }
+        
+        query += " ORDER BY name ASC"; // Added ordering for cleaner list
 
         const result = await pool.query(query, params);
         res.json(result.rows);
@@ -232,18 +238,12 @@ const getTeachers = async (req, res) => {
 };
 
 // ==========================================
-// 5. SMART BULK UPLOAD (Updated for Departments)
+// 5. SMART BULK UPLOAD (With Lookups & Upsert)
 // ==========================================
 
 const bulkUploadUsers = async (req, res) => {
     if (!req.file) {
         return res.status(400).send('No file uploaded.');
-    }
-
-    // Capture department_id from the frontend dropdown
-    const { department_id } = req.body;
-    if (!department_id) {
-        return res.status(400).json({ msg: "Department ID is required for bulk upload." });
     }
 
     try {
@@ -256,13 +256,14 @@ const bulkUploadUsers = async (req, res) => {
         
         const client = await pool.connect(); 
 
-        // 2. Pre-fetch Classes (Filtered by Department)
-        // We only map classes belonging to the selected department to avoid conflicts
-        const classRes = await client.query(
-            "SELECT class_id, name FROM classes WHERE department_id = $1", 
-            [department_id]
-        );
-        const classMap = new Map(); 
+        // 2. Fetch Lookup Maps (Institutes & Classes)
+        // Match by Name (Case-insensitive)
+        const instRes = await client.query("SELECT institute_id, name FROM institutes");
+        const instMap = new Map();
+        instRes.rows.forEach(i => instMap.set(i.name.trim().toLowerCase(), i.institute_id));
+
+        const classRes = await client.query("SELECT class_id, name FROM classes");
+        const classMap = new Map();
         classRes.rows.forEach(c => classMap.set(c.name.trim().toLowerCase(), c.class_id));
 
         let userCount = 0;
@@ -274,7 +275,7 @@ const bulkUploadUsers = async (req, res) => {
             const email = row['email'];
             const enrollment_number = row['enrollment_number'];
             
-            // ROLE LOGIC
+            // Default to STUDENT if role is missing or invalid
             let role = row['role'] ? row['role'].toString().trim().toUpperCase() : 'STUDENT';
             if (!['STUDENT', 'TEACHER', 'ADMIN'].includes(role)) {
                 role = 'STUDENT';
@@ -282,35 +283,46 @@ const bulkUploadUsers = async (req, res) => {
 
             // CLEAN INPUTS
             const classNameInput = row['class_name'] ? row['class_name'].toString().trim().toLowerCase() : null;
+            const instNameInput = row['institute_name'] ? row['institute_name'].toString().trim().toLowerCase() : null;
 
             if (!email || !enrollment_number) {
                 errors.push(`Skipped row: Missing email or enrollment number.`);
                 continue;
             }
 
-            // RESOLVE CLASS ID
+            // LOOKUP IDs
+            const foundInstituteId = instNameInput ? instMap.get(instNameInput) : null;
             const foundClassId = classNameInput ? classMap.get(classNameInput) : null;
 
-            // VALIDATE FOREIGN KEY (Students MUST have a valid class in this department)
-            if (role === 'STUDENT' && classNameInput && !foundClassId) {
-                errors.push(`Row ${name}: Class '${row['class_name']}' not found in this Department. Check spelling or create class first.`);
+            // --- VALIDATION LOGIC ---
+
+            // 1. Institute is Mandatory for Everyone (except maybe Super Admin, but usually yes)
+            if (!foundInstituteId) {
+                errors.push(`Row ${name}: Institute '${row['institute_name']}' not found in database.`);
+                continue;
+            }
+
+            // 2. Class is Mandatory for Students
+            if (role === 'STUDENT' && !foundClassId) {
+                errors.push(`Row ${name}: Class '${row['class_name']}' not found in database.`);
                 continue; 
             }
 
             try {
-                // 4. INSERT / UPDATE USER (Now includes department_id)
+                // 4. UPSERT USER (Insert or Update on Conflict)
                 const salt = await bcrypt.genSalt(10);
                 const hashedPassword = await bcrypt.hash(String(enrollment_number), salt);
 
                 await client.query(
-                    `INSERT INTO users (name, email, enrollment_number, password_hash, role, class_id, department_id) 
+                    `INSERT INTO users (name, email, enrollment_number, password_hash, role, class_id, institute_id) 
                      VALUES ($1, $2, $3, $4, $5, $6, $7) 
                      ON CONFLICT (enrollment_number) DO UPDATE 
                      SET email = EXCLUDED.email, 
                          name = EXCLUDED.name,
                          class_id = EXCLUDED.class_id,
                          role = EXCLUDED.role,
-                         department_id = EXCLUDED.department_id
+                         institute_id = EXCLUDED.institute_id
+                         -- Note: Password is NOT reset on update to preserve user changes.
                      RETURNING user_id`, 
                     [
                         name, 
@@ -318,8 +330,8 @@ const bulkUploadUsers = async (req, res) => {
                         enrollment_number, 
                         hashedPassword, 
                         role, 
-                        role === 'STUDENT' ? foundClassId : null, // Teachers always NULL class_id
-                        department_id // All uploaded users assigned to selected department
+                        role === 'STUDENT' ? foundClassId : null, // Only Students get a class
+                        foundInstituteId
                     ]
                 );
                 
@@ -359,11 +371,9 @@ const updateYearStatus = async (req, res) => {
             await client.query('BEGIN');
 
             if (is_active) {
-                // 1. Find the department of the year being activated
                 const yearRes = await client.query("SELECT department_id FROM academic_years WHERE academic_year_id = $1", [id]);
                 const deptId = yearRes.rows[0]?.department_id;
 
-                // 2. Deactivate all other years in that department (or global)
                 if (deptId) {
                     await client.query("UPDATE academic_years SET is_active = false WHERE department_id = $1", [deptId]);
                 } else {
@@ -371,7 +381,6 @@ const updateYearStatus = async (req, res) => {
                 }
             }
 
-            // 3. Update the target year
             const result = await client.query(
                 "UPDATE academic_years SET is_active = $1 WHERE academic_year_id = $2 RETURNING *",
                 [is_active, id]
@@ -396,13 +405,11 @@ const updateYearStatus = async (req, res) => {
 const updateSemesterStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const { is_active } = req.body; // Boolean
+        const { is_active } = req.body;
 
         const client = await pool.connect();
         try {
-            // VALIDATION: If trying to ACTIVATE, check if the Academic Year is active
             if (is_active) {
-                // Get the academic_year_id of this semester
                 const semRes = await client.query(
                     "SELECT academic_year_id FROM semesters WHERE semester_id = $1", 
                     [id]
@@ -414,7 +421,6 @@ const updateSemesterStatus = async (req, res) => {
 
                 const yearId = semRes.rows[0].academic_year_id;
 
-                // Check status of that Academic Year
                 const yearRes = await client.query(
                     "SELECT is_active, name FROM academic_years WHERE academic_year_id = $1", 
                     [yearId]
@@ -427,7 +433,6 @@ const updateSemesterStatus = async (req, res) => {
                 }
             }
 
-            // Proceed to Update
             const result = await client.query(
                 "UPDATE semesters SET is_active = $1 WHERE semester_id = $2 RETURNING *",
                 [is_active, id]
@@ -444,6 +449,38 @@ const updateSemesterStatus = async (req, res) => {
     }
 };
 
+const getStudents = async (req, res) => {
+    try {
+        const { institute_id, class_id } = req.query;
+        
+        let query = `
+            SELECT u.user_id, u.name, u.email, u.enrollment_number, u.institute_id, c.name as class_name 
+            FROM users u
+            LEFT JOIN classes c ON u.class_id = c.class_id
+            WHERE u.role = 'STUDENT'
+        `;
+        let params = [];
+
+        if (institute_id) {
+            query += ` AND u.institute_id = $${params.length + 1}`;
+            params.push(institute_id);
+        }
+
+        if (class_id) {
+            query += ` AND u.class_id = $${params.length + 1}`;
+            params.push(class_id);
+        }
+
+        query += " ORDER BY u.enrollment_number ASC";
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Server Error");
+    }
+};
+
 module.exports = {
     createInstitute, getInstitutes,
     createDepartment, getDepartments,
@@ -453,5 +490,5 @@ module.exports = {
     createClass, getClasses,
     allocateSubject, getTeachers,
     bulkUploadUsers, updateYearStatus,
-    updateSemesterStatus
+    updateSemesterStatus, getStudents
 };
