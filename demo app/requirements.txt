@@ -1,9 +1,10 @@
 fastapi
 uvicorn
 python-multipart
+pymupdf
 opencv-python
 numpy
-pymupdf
-faster-whisper
-sentence-transformers
-scikit-learn
+deepface
+python-dotenv
+groq
+requests

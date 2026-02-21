@@ -3,18 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Interview - Review Mode</title>
+    <title>AI Proctor & Examiner</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .neo-brutalist {
-            border: 4px solid black;
-            box-shadow: 8px 8px 0px 0px rgba(0,0,0,1);
-            transition: all 0.2s ease;
-        }
-        .neo-brutalist:active {
-            transform: translate(3px, 3px);
-            box-shadow: 4px 4px 0px 0px rgba(0,0,0,1);
-        }
+        .neo-brutalist { border: 4px solid black; box-shadow: 8px 8px 0px 0px rgba(0,0,0,1); transition: all 0.2s ease; }
+        .neo-brutalist:active { transform: translate(3px, 3px); box-shadow: 4px 4px 0px 0px rgba(0,0,0,1); }
         .recording { animation: pulse 1.5s infinite; background-color: #ef4444; border-color: white; }
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
     </style>
@@ -38,11 +31,20 @@
             </div>
         </div>
 
-        <div class="md:col-span-2">
+        <div class="md:col-span-2 space-y-6">
             
-            <section id="view-upload" class="neo-brutalist bg-white p-12 text-center">
-                <h2 class="text-2xl font-black uppercase mb-6">Load Exam Paper</h2>
+            <section id="view-register" class="neo-brutalist bg-white p-12 text-center">
+                <h2 class="text-3xl font-black uppercase mb-2">Identity Setup</h2>
+                <p class="mb-6 font-bold text-gray-600">Please align your face in the camera and register your ID.</p>
                 
+                <input type="text" id="student-id" placeholder="Enter Student ID (e.g. 101)" class="border-4 border-black p-4 w-full md:w-2/3 mb-4 font-bold text-xl text-center">
+                <button onclick="registerFace()" class="bg-black text-white font-bold py-4 px-8 w-full md:w-2/3 uppercase hover:bg-green-500 transition-colors border-4 border-black text-xl">📸 Register Face</button>
+                
+                <p id="register-status" class="mt-4 font-bold text-lg hidden"></p>
+            </section>
+
+            <section id="view-upload" class="hidden neo-brutalist bg-white p-12 text-center">
+                <h2 class="text-2xl font-black uppercase mb-6">Load Exam Paper</h2>
                 <p id="upload-status" class="hidden text-xl font-bold text-blue-600 mb-4 animate-pulse">⏳ Scanning PDF...</p>
 
                 <div class="border-4 border-dashed border-black p-12 bg-gray-50 cursor-pointer hover:bg-blue-100 transition" onclick="document.getElementById('pdf-file').click()">
@@ -58,19 +60,20 @@
                     <h3 id="ai-question" class="text-2xl font-black mt-2">...</h3>
                 </div>
 
-                <div id="recording-area" class="flex flex-col items-center gap-4">
+                <div id="recording-area" class="flex flex-col items-center gap-4 bg-white neo-brutalist p-8">
                     <button id="record-btn" class="neo-brutalist bg-yellow-400 w-24 h-24 rounded-full text-4xl flex items-center justify-center hover:scale-105 transition-transform">🎤</button>
-                    <p id="status-text" class="font-bold uppercase tracking-widest text-sm">Tap to Record</p>
+                    <p id="status-text" class="font-bold uppercase tracking-widest text-sm text-center">Tap to Start Answering</p>
                 </div>
 
                 <div id="review-area" class="hidden neo-brutalist bg-white p-6 border-blue-600 border-4">
-                    <h4 class="text-xl font-black uppercase mb-2 text-blue-600">Review Your Answer</h4>
-                    <p class="text-xs text-gray-500 mb-2">Fix any typos before submitting.</p>
-                    <textarea id="user-input" class="w-full border-2 border-black p-4 font-bold text-lg h-32" placeholder="Start recording to see text here..."></textarea>
+                    <h4 class="text-xl font-black uppercase mb-2 text-blue-600">Live Transcript</h4>
+                    <p id="edit-instructions" class="text-xs font-bold text-red-500 mb-2 uppercase animate-pulse">🔴 Listening... Text is locked.</p>
+                    
+                    <textarea id="user-input" class="w-full border-2 border-black p-4 font-bold text-lg h-32 bg-gray-200 cursor-not-allowed" readonly></textarea>
                     
                     <div class="flex gap-4 mt-4">
-                        <button onclick="resetRecording()" class="w-1/2 border-2 border-black py-3 font-bold uppercase hover:bg-gray-200">❌ Retry</button>
-                        <button onclick="submitFinalAnswer()" class="w-1/2 bg-black text-white py-3 font-bold uppercase hover:bg-green-500">✅ Submit Final</button>
+                        <button onclick="resetRecording()" class="w-1/2 border-2 border-black py-3 font-bold uppercase hover:bg-gray-200">❌ Restart Audio</button>
+                        <button id="submit-btn" onclick="submitFinalAnswer()" class="w-1/2 bg-black text-white py-3 font-bold uppercase hover:bg-green-500 hidden">✅ Submit Final</button>
                     </div>
                 </div>
 
@@ -79,29 +82,31 @@
                         <h4 class="text-xl font-black uppercase">Grade</h4>
                         <span id="points-badge" class="bg-black text-white px-4 py-1 font-bold">0/10</span>
                     </div>
-                    <p id="ai-reason" class="font-bold text-lg">...</p>
-                    <button onclick="nextQuestion()" class="mt-6 w-full bg-black text-white py-4 font-bold uppercase hover:bg-yellow-400 hover:text-black">Next ➔</button>
+                    <p id="ai-reason" class="font-bold text-lg mb-4">...</p>
+                    <button onclick="nextQuestion()" class="w-full bg-black text-white py-4 font-bold uppercase hover:bg-yellow-400 hover:text-black">Next ➔</button>
                 </div>
             </section>
 
             <section id="view-report" class="hidden neo-brutalist bg-white p-12 text-center">
                 <h2 class="text-4xl font-black uppercase mb-4">Final Score</h2>
                 <div class="text-8xl font-black mb-6 text-green-600" id="final-score">0%</div>
+                <p class="font-bold">Exam completed successfully.</p>
             </section>
         </div>
     </div>
 
     <script>
         let questions = [], currentIdx = 0, totalScore = 0, strikes = 0;
-        let mediaRecorder, audioChunks = [], isRecording = false;
+        let isRecording = false;
         const API_BASE = "http://localhost:8000";
+        
         const video = document.getElementById('webcam');
         const canvas = document.getElementById('snapshot-canvas');
 
-        // Initial Setup
-        navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => video.srcObject = stream);
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
+            video.srcObject = stream;
+        }).catch(err => alert("Camera & Mic access required!"));
 
-        // Capture Image Helper
         function captureBlob() {
             return new Promise(resolve => {
                 canvas.width = video.videoWidth; canvas.height = video.videoHeight;
@@ -110,7 +115,67 @@
             });
         }
 
-        // PDF Upload
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition;
+        
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+
+            recognition.onresult = (event) => {
+                let interimTranscript = '';
+                let finalTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript;
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+                document.getElementById('user-input').value = finalTranscript + interimTranscript; 
+            };
+        } else {
+            alert("Please use Chrome or Edge for live transcription.");
+        }
+
+        async function registerFace() {
+            const studentId = document.getElementById('student-id').value.trim();
+            const statusEl = document.getElementById('register-status');
+            if(!studentId) { alert("Please enter Student ID."); return; }
+
+            statusEl.classList.remove('hidden', 'text-green-600', 'text-red-600');
+            statusEl.classList.add('text-blue-600');
+            statusEl.innerText = "Processing Face...";
+
+            const imgBlob = await captureBlob();
+            const fd = new FormData();
+            fd.append('student_id', studentId);
+            fd.append('image', imgBlob);
+
+            try {
+                const res = await fetch(`${API_BASE}/register-face`, { method: 'POST', body: fd });
+                const data = await res.json();
+                
+                if(data.status === "SUCCESS") {
+                    statusEl.innerText = data.message;
+                    statusEl.classList.replace('text-blue-600', 'text-green-600');
+                    setTimeout(() => {
+                        document.getElementById('view-register').classList.add('hidden');
+                        document.getElementById('view-upload').classList.remove('hidden');
+                    }, 1000);
+                } else {
+                    statusEl.innerText = data.message;
+                    statusEl.classList.replace('text-blue-600', 'text-red-600');
+                }
+            } catch(e) {
+                statusEl.innerText = "Server Error. Is backend running?";
+                statusEl.classList.replace('text-blue-600', 'text-red-600');
+            }
+        }
+
         document.getElementById('pdf-file').onchange = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -125,18 +190,14 @@
                 questions = await res.json();
                 
                 if(questions.length > 0) {
-                    statusText.classList.add('hidden');
                     document.getElementById('view-upload').classList.add('hidden');
                     document.getElementById('view-interview').classList.remove('hidden');
                     loadQuestion(0);
                 } else {
-                    statusText.innerText = "❌ No questions found! PDF must use 'Q1: ... Answer: ...' format.";
-                    statusText.classList.remove('text-blue-600', 'animate-pulse');
-                    statusText.classList.add('text-red-600');
-                    alert("Format Error: No questions found.");
+                    statusText.innerText = "❌ No questions found.";
+                    statusText.classList.replace('text-blue-600', 'text-red-600');
                 }
             } catch (err) {
-                console.error(err);
                 statusText.innerText = "❌ Connection Failed.";
             }
         };
@@ -146,82 +207,108 @@
             document.getElementById('result-box').classList.add('hidden');
             document.getElementById('review-area').classList.add('hidden');
             document.getElementById('recording-area').classList.remove('hidden');
-            
             document.getElementById('q-number').innerText = `Q${idx + 1}`;
             document.getElementById('ai-question').innerText = questions[idx].question;
             document.getElementById('user-input').value = "";
-            
             window.speechSynthesis.speak(new SpeechSynthesisUtterance(questions[idx].question));
+            
+            document.getElementById('status-text').innerText = "Tap to Start Answering";
+            document.getElementById('submit-btn').classList.add('hidden'); 
         }
 
-        // Recording Logic
         document.getElementById('record-btn').onclick = () => {
+            if (!recognition) return;
+            const inputArea = document.getElementById('user-input');
+            const instructions = document.getElementById('edit-instructions');
+            const submitBtn = document.getElementById('submit-btn');
+
             if (!isRecording) {
-                audioChunks = [];
-                mediaRecorder = new MediaRecorder(video.srcObject);
-                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-                mediaRecorder.onstop = sendToTranscribe; // Go to Transcribe only
-                mediaRecorder.start();
+                inputArea.value = ""; 
+                document.getElementById('recording-area').classList.add('hidden');
+                document.getElementById('review-area').classList.remove('hidden'); 
+                
+                inputArea.readOnly = true; 
+                inputArea.classList.add('bg-gray-200', 'cursor-not-allowed');
+                inputArea.classList.remove('bg-white');
+                
+                instructions.innerText = "🔴 Listening... Text is locked.";
+                instructions.classList.replace('text-green-600', 'text-red-500');
+                instructions.classList.add('animate-pulse');
+                submitBtn.classList.add('hidden'); 
+                
+                recognition.start();
                 isRecording = true;
+                
                 document.getElementById('record-btn').classList.add('recording');
-                document.getElementById('status-text').innerText = "Recording...";
+                document.getElementById('status-text').innerText = "Tap to Stop & Edit";
+                document.getElementById('recording-area').classList.remove('hidden'); 
             } else {
-                mediaRecorder.stop();
+                recognition.stop();
                 isRecording = false;
+                
+                inputArea.readOnly = false; 
+                inputArea.classList.remove('bg-gray-200', 'cursor-not-allowed');
+                inputArea.classList.add('bg-white');
+                
+                instructions.innerText = "✅ Done! You can now edit your text manually.";
+                instructions.classList.replace('text-red-500', 'text-green-600');
+                instructions.classList.remove('animate-pulse');
+                submitBtn.classList.remove('hidden'); 
+                
                 document.getElementById('record-btn').classList.remove('recording');
-                document.getElementById('status-text').innerText = "Processing...";
+                document.getElementById('recording-area').classList.add('hidden'); 
             }
         };
 
-        // Step 1: Transcribe (No Grading Yet)
-        async function sendToTranscribe() {
-            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-            const fd = new FormData(); fd.append('audio', audioBlob);
-            
-            const res = await fetch(`${API_BASE}/transcribe`, { method: 'POST', body: fd });
-            const data = await res.json();
-            
-            // Show Edit Area
-            document.getElementById('recording-area').classList.add('hidden');
-            document.getElementById('review-area').classList.remove('hidden');
-            document.getElementById('user-input').value = data.text;
-        }
-
         function resetRecording() {
+            document.getElementById('user-input').value = "";
             document.getElementById('review-area').classList.add('hidden');
             document.getElementById('recording-area').classList.remove('hidden');
-            document.getElementById('status-text').innerText = "Tap to Record";
+            document.getElementById('status-text').innerText = "Tap to Start Answering";
+            isRecording = false;
+            try { recognition.stop(); } catch(e) {}
         }
 
-        // Step 2: Submit Final Answer (Grade)
         async function submitFinalAnswer() {
+            const btn = document.getElementById('submit-btn');
+            btn.innerText = "⏳ Grading..."; btn.disabled = true;
+
             const text = document.getElementById('user-input').value;
-            const imgBlob = await captureBlob(); // Check face now
+            const studentId = document.getElementById('student-id').value;
+            const imgBlob = await captureBlob(); 
             
             const fd = new FormData();
+            fd.append('question', questions[currentIdx].question);
             fd.append('user_text', text);
             fd.append('correct_answer', questions[currentIdx].answer);
+            fd.append('student_id', studentId);
             fd.append('image', imgBlob);
 
-            const res = await fetch(`${API_BASE}/grade`, { method: 'POST', body: fd });
-            const data = await res.json();
+            try {
+                const res = await fetch(`${API_BASE}/grade`, { method: 'POST', body: fd });
+                const data = await res.json();
 
-            // Handle Strikes
-            if (data.face_status !== "OK") {
-                strikes++;
-                document.getElementById('strike-count').innerText = strikes;
-                alert(`⚠️ Warning: ${data.face_status}`);
+                if (data.face_status !== "OK") {
+                    strikes++;
+                    document.getElementById('strike-count').innerText = strikes;
+                    alert(`⚠️ SECURITY ALERT: ${data.face_status}\nEnsure you are clearly visible.`);
+                }
+
+                totalScore += data.score;
+                document.getElementById('review-area').classList.add('hidden');
+                
+                const box = document.getElementById('result-box');
+                box.classList.remove('hidden', 'bg-green-100', 'bg-red-100');
+                box.classList.add(data.score >= 5 ? 'bg-green-100' : 'bg-red-100');
+                
+                document.getElementById('points-badge').innerText = `${data.score}/10`;
+                document.getElementById('ai-reason').innerText = data.feedback;
+                
+            } catch(e) {
+                alert("Error connecting to server for grading.");
+            } finally {
+                btn.innerText = "✅ Submit Final"; btn.disabled = false;
             }
-
-            // Show Score
-            totalScore += data.score;
-            document.getElementById('review-area').classList.add('hidden');
-            const box = document.getElementById('result-box');
-            box.classList.remove('hidden', 'bg-green-100', 'bg-red-100');
-            box.classList.add(data.score >= 5 ? 'bg-green-100' : 'bg-red-100');
-            
-            document.getElementById('points-badge').innerText = `${data.score}/10`;
-            document.getElementById('ai-reason').innerText = data.feedback;
         }
 
         window.nextQuestion = () => {
