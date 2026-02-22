@@ -22,6 +22,7 @@ import DepartmentForm from '@/components/Admin/forms/DepartmentForm';
 // New Data Views
 import TeacherList from '@/components/Admin/views/TeacherList';
 import StudentList from '@/components/Admin/views/StudentList';
+import AllocationList from '@/components/Admin/views/AllocationList'; // <-- NEW IMPORT
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('institutes'); 
@@ -84,7 +85,8 @@ const AdminDashboard = () => {
 
         <StatusMessage message={message} error={error} />
 
-        <div className="bg-white border-2 border-black p-8 max-w-4xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+        {/* Dynamic Width based on View (Lists need more space than forms) */}
+        <div className={`bg-white border-2 border-black p-8 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${activeTab.includes('list') || activeTab === 'teachers' || activeTab === 'students' ? 'w-full max-w-6xl' : 'max-w-4xl'}`}>
           
           {/* FORMS */}
           {activeTab === 'institutes' && <InstituteForm onSuccess={handleSuccess} onError={handleError} institutes={institutes} />}
@@ -94,12 +96,16 @@ const AdminDashboard = () => {
           {activeTab === 'semesters' && <SemesterForm onSuccess={handleSuccess} onError={handleError} years={years} />}
           {activeTab === 'subjects' && <SubjectForm onSuccess={handleSuccess} onError={handleError} />}
           {activeTab === 'classes' && <ClassForm onSuccess={handleSuccess} onError={handleError} semesters={semesters} />}
-          {activeTab === 'allocations' && <AllocationForm onSuccess={handleSuccess} onError={handleError} teachers={teachers} subjects={subjects} classes={classes} />}
+          
+          {/* Allocation Action */}
+          {activeTab === 'allocations' && <AllocationForm onSuccess={handleSuccess} onError={handleError} />}
+          
           {activeTab === 'users' && <BulkUploadForm onSuccess={handleSuccess} onError={handleError} />}
 
           {/* NEW DATA VIEWS (No forms, just lists) */}
           {activeTab === 'teachers' && <TeacherList />}
           {activeTab === 'students' && <StudentList />}
+          {activeTab === 'allocation-list' && <AllocationList />} {/* <-- NEW RENDER */}
 
         </div>
       </main>

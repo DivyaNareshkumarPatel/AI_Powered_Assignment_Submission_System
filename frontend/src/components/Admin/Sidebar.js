@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   LayoutDashboard, Calendar, BookOpen, Users, 
   GraduationCap, Layers, Upload, Building, Library,
-  UserCheck // <--- Imported for Teachers
+  UserCheck, ClipboardList // <--- Imported ClipboardList for Allocations List
 } from 'lucide-react';
 
 const Sidebar = ({ activeTab, setActiveTab }) => {
@@ -42,10 +42,15 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
         
         <div className="my-2 border-t-2 border-gray-200"></div>
 
-        {/* PEOPLE & DATA */}
-        <SidebarItem id="teachers" label="Teacher Data" icon={UserCheck} /> {/* NEW */}
-        <SidebarItem id="students" label="Student Data" icon={Users} />     {/* NEW */}
-        <SidebarItem id="allocations" label="Allocations" icon={Users} />
+        {/* DATA VIEWS */}
+        <SidebarItem id="teachers" label="Teacher Data" icon={UserCheck} /> 
+        <SidebarItem id="students" label="Student Data" icon={Users} />     
+        <SidebarItem id="allocation-list" label="Allocation Data" icon={ClipboardList} /> {/* <-- NEW VIEW */}
+        
+        <div className="my-2 border-t-2 border-gray-200"></div>
+
+        {/* ACTIONS */}
+        <SidebarItem id="allocations" label="Allocate Teacher" icon={UserCheck} />
         <SidebarItem id="users" label="Bulk Upload" icon={Upload} />
       </nav>
     </aside>

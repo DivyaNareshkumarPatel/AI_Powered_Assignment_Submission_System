@@ -1,288 +1,432 @@
-import React, { useState, useEffect } from 'react';
-import { createYear, getDepartments, updateYearStatus } from '@/utils/api'; 
-import { AlertTriangle, Check, Calendar, ArrowRight, Loader2, Power } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { createYear, getYears, getDepartments, getInstitutes, updateYearStatus, updateYear, deleteYear } from '@/utils/api';
+import { Calendar, RefreshCw, Power, CheckCircle, XCircle, Filter, Search, AlertTriangle, Edit2, Trash2, X } from 'lucide-react';
 
-const AcademicYearForm = ({ onSuccess, onError, years, departments: propDepartments }) => {
+const AcademicYearForm = ({ onSuccess, onError }) => {
+  const [years, setYears] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [institutes, setInstitutes] = useState([]);
+  const [loadingData, setLoadingData] = useState(true);
+
+  // Form State
   const [form, setForm] = useState({ 
     name: '', 
     start_date: '', 
     end_date: '', 
-    department_id: '',
-    is_active: false 
+    department_id: '' 
   });
+  const [submitting, setSubmitting] = useState(false);
   
-  const [showConfirm, setShowConfirm] = useState(false);
+  // States for Edit Mode
+  const [isEditing, setIsEditing] = useState(false);
+  const [editId, setEditId] = useState(null);
+
+  // Filter & Search State
+  const [filterInstitute, setFilterInstitute] = useState('');
+  const [filterStatus, setFilterStatus] = useState('ALL'); 
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Modals State
+  const [showStatusConfirm, setShowStatusConfirm] = useState(false);
+  const [yearToToggle, setYearToToggle] = useState(null);
   
-  // confirmAction can be: 'CREATE', 'ACTIVATE', 'DEACTIVATE'
-  const [confirmAction, setConfirmAction] = useState(null); 
-  
-  const [targetYear, setTargetYear] = useState(null); 
-  const [loading, setLoading] = useState(false);
-  
-  const [localDepartments, setLocalDepartments] = useState([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [yearToDelete, setYearToDelete] = useState(null);
 
-  useEffect(() => {
-    if (!propDepartments || propDepartments.length === 0) {
-      const fetchDepts = async () => {
-        try {
-          const data = await getDepartments();
-          setLocalDepartments(data);
-        } catch (err) { console.error(err); }
-      };
-      fetchDepts();
-    } else {
-      setLocalDepartments(propDepartments);
-    }
-  }, [propDepartments]);
-
-  const getDeptName = (id) => {
-    if (!id) return 'UNIVERSITY WIDE';
-    const dept = localDepartments?.find(d => d.department_id === id);
-    return dept ? dept.name : 'Unknown Dept';
-  };
-
-  // --- HANDLERS ---
-
-  // 1. Handle Create Form Submit
-  const handleCreatePreSubmit = (e) => {
-    e.preventDefault();
-    if (form.is_active) {
-      setConfirmAction('CREATE');
-      setShowConfirm(true); 
-    } else {
-      submitCreateData(); 
-    }
-  };
-
-  const submitCreateData = async () => {
-    setLoading(true);
+  const fetchData = async () => {
+    setLoadingData(true);
     try {
-      await createYear(form); 
-      onSuccess("ACADEMIC YEAR CREATED");
-      setForm({ name: '', start_date: '', end_date: '', department_id: '', is_active: false });
-      setShowConfirm(false);
+      const [yearRes, deptRes, instRes] = await Promise.all([
+        getYears(),
+        getDepartments(),
+        getInstitutes()
+      ]);
+      setYears(yearRes || []);
+      setDepartments(deptRes || []);
+      setInstitutes(instRes || []);
     } catch (err) {
-      onError(err.response?.data?.error || "FAILED TO CREATE YEAR");
+      console.error("Error fetching data", err);
     } finally {
-      setLoading(false);
+      setLoadingData(false);
     }
   };
 
-  // 2. Handle Status Toggle (Activate OR Deactivate)
-  const handleToggleStatus = (year) => {
-    setTargetYear(year);
-    setShowConfirm(true);
+  useEffect(() => { fetchData(); }, []);
 
-    if (year.is_active) {
-      setConfirmAction('DEACTIVATE');
-    } else {
-      setConfirmAction('ACTIVATE');
+  const formDepartments = departments; 
+
+  const filteredYears = useMemo(() => {
+    let result = years;
+
+    if (filterInstitute) {
+        result = result.filter(y => {
+            const dept = departments.find(d => d.department_id === y.department_id);
+            return dept && dept.institute_id === filterInstitute;
+        });
     }
-  };
 
-  const submitUpdateStatus = async (id, status) => {
-    setLoading(true);
+    if (filterStatus !== 'ALL') {
+        const isActive = filterStatus === 'ACTIVE';
+        result = result.filter(y => y.is_active === isActive);
+    }
+
+    if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        result = result.filter(y => y.name.toLowerCase().includes(q) || (y.department_name && y.department_name.toLowerCase().includes(q)));
+    }
+
+    return result;
+  }, [years, departments, filterInstitute, filterStatus, searchQuery]);
+
+  // ==============================
+  // HANDLERS
+  // ==============================
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (new Date(form.start_date) > new Date(form.end_date)) {
+        return onError("End date cannot be before start date!");
+    }
+    setSubmitting(true);
     try {
-      await updateYearStatus(id, status);
-      onSuccess(`YEAR ${status ? 'ACTIVATED' : 'DEACTIVATED'}`);
-      setShowConfirm(false);
-      setTargetYear(null);
+      if (isEditing) {
+        await updateYear(editId, form);
+        onSuccess("ACADEMIC YEAR UPDATED");
+        cancelEdit();
+      } else {
+        await createYear(form);
+        onSuccess("ACADEMIC YEAR CREATED (ACTIVE)");
+        setForm({ name: '', start_date: '', end_date: '', department_id: '' });
+      }
+      fetchData();
+    } catch (err) {
+      onError(err.response?.data?.error || (isEditing ? "FAILED TO UPDATE YEAR" : "FAILED TO CREATE YEAR"));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEditClick = (year) => {
+    setIsEditing(true);
+    setEditId(year.academic_year_id);
+    setForm({
+      name: year.name,
+      start_date: new Date(year.start_date).toISOString().split('T')[0],
+      end_date: new Date(year.end_date).toISOString().split('T')[0],
+      department_id: year.department_id
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelEdit = () => {
+    setIsEditing(false);
+    setEditId(null);
+    setForm({ name: '', start_date: '', end_date: '', department_id: '' });
+  };
+
+  // Status Toggle Handlers
+  const handleToggleClick = (year) => {
+    setYearToToggle(year);
+    setShowStatusConfirm(true);
+  };
+
+  const confirmToggle = async () => {
+    if (!yearToToggle) return;
+    try {
+      await updateYearStatus(yearToToggle.academic_year_id, !yearToToggle.is_active);
+      onSuccess(`YEAR ${!yearToToggle.is_active ? 'ACTIVATED' : 'DEACTIVATED'}`);
+      fetchData();
     } catch (err) {
       onError("FAILED TO UPDATE STATUS");
     } finally {
-      setLoading(false);
+      setShowStatusConfirm(false);
+      setYearToToggle(null);
     }
   };
 
-  const handleConfirmClick = () => {
-    if (confirmAction === 'CREATE') {
-      submitCreateData();
-    } else if (confirmAction === 'ACTIVATE') {
-      submitUpdateStatus(targetYear.academic_year_id, true);
-    } else if (confirmAction === 'DEACTIVATE') {
-      submitUpdateStatus(targetYear.academic_year_id, false);
+  // Delete Handlers
+  const handleDeleteClick = (year) => {
+    setYearToDelete(year);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!yearToDelete) return;
+    try {
+      await deleteYear(yearToDelete.academic_year_id);
+      onSuccess("ACADEMIC YEAR DELETED");
+      if (isEditing && editId === yearToDelete.academic_year_id) cancelEdit();
+      fetchData();
+    } catch (err) {
+      onError("FAILED TO DELETE YEAR");
+    } finally {
+      setShowDeleteConfirm(false);
+      setYearToDelete(null);
     }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Not Set';
+    return new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
   return (
-    <div className="space-y-8 relative">
+    <div className="space-y-10 relative">
       
-      {/* =======================
-          CREATE FORM 
-      ======================== */}
-      <form onSubmit={handleCreatePreSubmit} className="space-y-6">
-        <h3 className="text-xl font-black uppercase border-b-2 border-black pb-2 flex items-center gap-2">
-          <Calendar className="w-6 h-6" /> Create Academic Year
+      {/* ==========================
+          CREATE / EDIT FORM
+      ========================== */}
+      <form onSubmit={handleSubmit} className={`space-y-6 p-6 border-4 ${isEditing ? 'border-blue-500 bg-blue-50' : 'border-black bg-white'} pb-10`}>
+        <h3 className="text-xl font-bold uppercase border-b-2 border-black pb-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Calendar size={24} /> 
+            {isEditing ? "Edit Academic Year" : "Add New Academic Year"}
+          </div>
+          {isEditing && (
+            <button type="button" onClick={cancelEdit} className="text-gray-500 hover:text-black flex items-center gap-1 text-sm">
+              <X size={16}/> Cancel
+            </button>
+          )}
         </h3>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="md:col-span-2">
-            <label className="block text-xs font-bold mb-1 uppercase tracking-wider">Department Scope</label>
-            <div className="relative">
-              <select 
-                className="w-full p-3 border-2 border-black focus:bg-gray-50 outline-none font-bold bg-white appearance-none rounded-none"
-                value={form.department_id}
-                onChange={e => setForm({...form, department_id: e.target.value})}
-              >
-                <option value="">-- GLOBAL / UNIVERSITY WIDE --</option>
-                {localDepartments.map(d => (
-                  <option key={d.department_id} value={d.department_id}>
-                    {d.name} ({d.institute_name})
-                  </option>
-                ))}
-              </select>
-              <div className="absolute right-4 top-4 pointer-events-none">
-                {localDepartments.length === 0 ? <Loader2 className="animate-spin w-4 h-4" /> : <ArrowRight size={16} />}
-              </div>
-            </div>
-            <p className="text-[10px] text-gray-500 mt-1 font-mono uppercase">
-              * Select 'Global' if this year applies to all departments.
-            </p>
+          <div>
+            <label className="block text-xs font-bold mb-1 uppercase tracking-wider">Department (MANDATORY)</label>
+            <select 
+              className="w-full p-3 border-2 border-black focus:bg-gray-50 outline-none font-bold bg-white" 
+              value={form.department_id} 
+              onChange={e => setForm({...form, department_id: e.target.value})} 
+              required
+            >
+              <option value="">-- SELECT DEPARTMENT --</option>
+              {formDepartments.map(d => (
+                <option key={d.department_id} value={d.department_id}>{d.institute_name} - {d.name}</option>
+              ))}
+            </select>
           </div>
 
-          <div className="md:col-span-2">
-            <label className="block text-xs font-bold mb-1 uppercase tracking-wider">Year Name</label>
+          <div>
+            <label className="block text-xs font-bold mb-1 uppercase tracking-wider">Academic Year Name</label>
             <input 
               type="text" 
-              placeholder="e.g. 2025-2026" 
-              className="w-full p-3 border-2 border-black focus:bg-gray-50 outline-none font-bold rounded-none placeholder:font-normal" 
+              placeholder="e.g. 2024-2025" 
+              className="w-full p-3 border-2 border-black focus:bg-gray-50 outline-none font-bold" 
               value={form.name} 
               onChange={e => setForm({...form, name: e.target.value})} 
               required 
             />
           </div>
-          
-          <div>
-            <label className="block text-xs font-bold mb-1 uppercase tracking-wider">Start Date</label>
-            <input type="date" className="w-full p-3 border-2 border-black focus:bg-gray-50 outline-none font-mono rounded-none" 
-              value={form.start_date} onChange={e => setForm({...form, start_date: e.target.value})} required />
-          </div>
-          
-          <div>
-            <label className="block text-xs font-bold mb-1 uppercase tracking-wider">End Date</label>
-            <input type="date" className="w-full p-3 border-2 border-black focus:bg-gray-50 outline-none font-mono rounded-none" 
-              value={form.end_date} onChange={e => setForm({...form, end_date: e.target.value})} required />
-          </div>
+        </div>
 
-          <div 
-            className={`md:col-span-2 flex items-center gap-4 p-4 border-2 border-black cursor-pointer transition-all select-none
-              ${form.is_active ? 'bg-black text-white' : 'bg-white text-black hover:bg-gray-50'}`}
-            onClick={() => setForm({...form, is_active: !form.is_active})}
-          >
-            <div className={`w-6 h-6 border-2 flex items-center justify-center transition-colors
-              ${form.is_active ? 'border-white bg-white' : 'border-black bg-white'}`}>
-               {form.is_active && <Check size={16} className="text-black" strokeWidth={4} />}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-xs font-bold mb-1 uppercase tracking-wider flex items-center gap-2">
+              <Calendar size={14}/> Start Date (MANDATORY)
+            </label>
+            <input 
+              type="date" 
+              className="w-full p-3 border-2 border-black focus:bg-gray-50 outline-none font-bold bg-white" 
+              value={form.start_date} 
+              onChange={e => setForm({...form, start_date: e.target.value})} 
+              required 
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold mb-1 uppercase tracking-wider flex items-center gap-2">
+              <Calendar size={14}/> End Date (MANDATORY)
+            </label>
+            <input 
+              type="date" 
+              className="w-full p-3 border-2 border-black focus:bg-gray-50 outline-none font-bold bg-white" 
+              value={form.end_date} 
+              onChange={e => setForm({...form, end_date: e.target.value})} 
+              required 
+            />
+          </div>
+        </div>
+
+        <button disabled={submitting} className={`mt-8 w-full text-white font-black uppercase tracking-widest py-4 transition-all shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[3px] active:translate-y-[3px] disabled:opacity-50 ${isEditing ? 'bg-blue-600 hover:bg-blue-800' : 'bg-black hover:bg-gray-800'}`}>
+          {submitting ? "PROCESSING..." : (isEditing ? "UPDATE ACADEMIC YEAR" : "CREATE ACADEMIC YEAR")}
+        </button>
+      </form>
+
+      {/* ==========================
+          EXISTING YEARS LIST
+      ========================== */}
+      <div>
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-6">
+          <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2 w-full xl:w-auto">
+            <RefreshCw size={20} className={`cursor-pointer hover:rotate-180 transition-transform ${loadingData ? 'animate-spin' : ''}`} onClick={fetchData}/>
+            Existing Academic Years
+          </h3>
+          
+          <div className="flex flex-col sm:flex-row flex-wrap items-center gap-4 w-full xl:w-auto">
+            <div className="relative w-full sm:w-[200px]">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Search className="h-4 w-4 text-gray-400" />
+                </div>
+                <input
+                    type="text" placeholder="Search name/dept..."
+                    className="w-full pl-9 pr-3 py-2 border-2 border-black font-bold outline-none focus:bg-gray-50 text-xs"
+                    value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                />
             </div>
-            <div>
-              <span className="font-bold block uppercase tracking-wide">Set as Active Year</span>
-              <span className={`text-xs font-mono block ${form.is_active ? 'text-gray-300' : 'text-gray-500'}`}>
-                Check this to make it the current year immediately.
-              </span>
+
+            <div className="flex items-center bg-gray-100 border-2 border-black w-full sm:w-auto">
+              <button type="button" onClick={() => setFilterStatus('ALL')} className={`flex-1 sm:flex-none px-3 py-2 text-[10px] font-black uppercase transition-colors ${filterStatus === 'ALL' ? 'bg-black text-white' : 'text-gray-500 hover:bg-gray-200'}`}>All</button>
+              <button type="button" onClick={() => setFilterStatus('ACTIVE')} className={`flex-1 sm:flex-none px-3 py-2 text-[10px] font-black uppercase border-l-2 border-black transition-colors ${filterStatus === 'ACTIVE' ? 'bg-green-600 text-white' : 'text-gray-500 hover:bg-gray-200'}`}>Active</button>
+              <button type="button" onClick={() => setFilterStatus('INACTIVE')} className={`flex-1 sm:flex-none px-3 py-2 text-[10px] font-black uppercase border-l-2 border-black transition-colors ${filterStatus === 'INACTIVE' ? 'bg-red-600 text-white' : 'text-gray-500 hover:bg-gray-200'}`}>Inactive</button>
+            </div>
+
+            <div className="flex items-center gap-2 bg-gray-100 p-2 border-2 border-black w-full sm:w-auto">
+              <Filter size={16} />
+              <select 
+                className="p-1 bg-transparent text-xs font-bold outline-none border-b-2 border-transparent hover:border-black transition-colors min-w-[150px] w-full"
+                value={filterInstitute} onChange={e => setFilterInstitute(e.target.value)}
+              >
+                <option value="">ALL INSTITUTES</option>
+                {institutes.map(i => (<option key={i.institute_id} value={i.institute_id}>{i.name}</option>))}
+              </select>
             </div>
           </div>
         </div>
 
-        <button disabled={loading} className="w-full bg-black text-white font-black uppercase tracking-widest py-4 hover:bg-gray-800 transition-all shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[3px] active:translate-y-[3px] disabled:opacity-50">
-          {loading ? "PROCESSING..." : "CREATE ACADEMIC YEAR"}
-        </button>
-      </form>
+        <div className="border-2 border-black bg-white max-h-[500px] overflow-y-auto">
+          {loadingData ? (
+             <div className="p-12 text-center font-bold animate-pulse">LOADING DATA...</div>
+          ) : filteredYears.length > 0 ? (
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-black text-white text-xs uppercase sticky top-0 z-10 shadow-sm">
+                <tr>
+                  <th className="p-4">Academic Year</th>
+                  <th className="p-4">Duration</th>
+                  <th className="p-4">Department</th>
+                  <th className="p-4">Status</th>
+                  <th className="p-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="text-sm">
+                {filteredYears.map((year, idx) => (
+                    <tr key={year.academic_year_id} className={`border-b border-gray-200 hover:bg-gray-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                      
+                      <td className="p-4 border-r border-gray-200">
+                        <div className="font-black text-base">{year.name}</div>
+                      </td>
 
-      {/* =======================
-          EXISTING YEARS LIST 
-      ======================== */}
-      <div className="border-t-4 border-black pt-8 mt-8">
-        <h3 className="text-lg font-black uppercase mb-4 tracking-tighter">Existing Academic Years</h3>
-        {years && years.length > 0 ? (
-          <ul className="space-y-3 max-h-80 overflow-y-auto pr-2">
-            {years.map(y => (
-              <li key={y.academic_year_id} className="p-4 border-2 border-black flex justify-between items-center bg-white shadow-[4px_4px_0px_0px_rgba(200,200,200,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all group">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-black text-lg">{y.name}</span>
-                    {y.is_active && (
-                       <span className="bg-black text-white text-[10px] font-bold px-2 py-0.5 uppercase tracking-wide">Current</span>
-                    )}
-                  </div>
-                  <div className="text-xs text-gray-500 font-bold uppercase mt-1 flex items-center gap-2">
-                    <span className="w-2 h-2 bg-black rounded-full"></span>
-                    {getDeptName(y.department_id)}
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-4">
-                  <button 
-                    onClick={() => handleToggleStatus(y)}
-                    className={`flex items-center gap-2 px-3 py-1.5 border-2 border-black font-bold text-xs uppercase transition-all
-                      ${y.is_active 
-                        ? 'bg-black text-white hover:bg-gray-800' 
-                        : 'bg-white text-gray-400 hover:text-black hover:bg-gray-50'}`}
-                  >
-                    <Power size={14} />
-                    {y.is_active ? 'Active' : 'Activate'}
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="p-8 text-center border-2 border-dashed border-gray-300">
-            <p className="text-gray-400 font-bold">NO YEARS FOUND</p>
-          </div>
-        )}
+                      <td className="p-4 border-r border-gray-200 text-xs font-mono text-gray-600">
+                        <div className="flex flex-col gap-1">
+                          <span className="font-bold text-black">{formatDate(year.start_date)}</span>
+                          <span className="text-[10px] uppercase text-gray-400">to</span>
+                          <span className="font-bold text-black">{formatDate(year.end_date)}</span>
+                        </div>
+                      </td>
+
+                      <td className="p-4 border-r border-gray-200">
+                        <div className="font-bold text-sm">{year.department_name}</div>
+                        <div className="text-[10px] uppercase font-bold text-gray-500 mt-1">{year.institute_name}</div>
+                      </td>
+
+                      <td className="p-4 border-r border-gray-200">
+                         {year.is_active ? (
+                            <span className="inline-flex items-center gap-1 bg-black text-white text-[10px] px-2 py-0.5 font-bold uppercase tracking-wide border border-black"><CheckCircle size={10} /> Active</span>
+                         ) : (
+                            <span className="inline-flex items-center gap-1 bg-white text-gray-400 text-[10px] px-2 py-0.5 font-bold uppercase tracking-wide border border-gray-300"><XCircle size={10} /> Inactive</span>
+                         )}
+                      </td>
+
+                      <td className="p-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                           {/* Status Toggle Button */}
+                           <button
+                             onClick={() => handleToggleClick(year)}
+                             title="Toggle Status"
+                             className={`p-2 border-2 transition-all ${year.is_active ? 'border-black bg-white text-black hover:bg-black hover:text-white' : 'border-black bg-black text-white hover:bg-gray-800'}`}
+                           >
+                             <Power size={16}/>
+                           </button>
+
+                           {/* Edit Button */}
+                           <button 
+                             onClick={() => handleEditClick(year)}
+                             title="Edit Year"
+                             className="p-2 border-2 border-black bg-white hover:bg-black hover:text-white transition-colors"
+                           >
+                             <Edit2 size={16} />
+                           </button>
+
+                           {/* Delete Button */}
+                           <button 
+                             onClick={() => handleDeleteClick(year)}
+                             title="Delete Year"
+                             className="p-2 border-2 border-transparent text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                           >
+                             <Trash2 size={16} />
+                           </button>
+                        </div>
+                      </td>
+
+                    </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="p-12 text-center text-gray-400 font-bold uppercase border-dashed">
+                {searchQuery || filterInstitute || filterStatus !== 'ALL' ? "No academic years found matching filters." : "No academic years found."}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* =======================
-          CONFIRMATION MODAL 
+          TOGGLE STATUS MODAL 
       ======================== */}
-      {showConfirm && (
+      {showStatusConfirm && yearToToggle && (
         <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white border-4 border-black shadow-[12px_12px_0px_0px_rgba(255,255,255,0.2)] max-w-md w-full p-8 relative">
-            
-            <div className="flex items-center gap-4 mb-6 text-black border-b-2 border-black pb-4">
+          <div className="bg-white border-4 border-black shadow-[12px_12px_0px_0px_rgba(255,255,255,0.2)] max-w-md w-full p-8">
+            <div className={`flex items-center gap-4 mb-6 border-b-2 border-black pb-4 ${yearToToggle.is_active ? 'text-red-600' : 'text-green-600'}`}>
               <AlertTriangle size={36} strokeWidth={2.5} />
-              <h2 className="text-2xl font-black uppercase tracking-tighter">Warning</h2>
+              <h2 className="text-2xl font-black uppercase text-black">Confirm Action</h2>
             </div>
-            
-            <div className="font-medium text-black mb-8 space-y-4">
-              <p>
-                You are about to <span className="font-black">{confirmAction}</span> the year: <br/>
-                <span className="text-xl font-black">{confirmAction === 'CREATE' ? form.name : targetYear?.name}</span>
-              </p>
-              
-              <div className="bg-gray-100 p-4 border-l-4 border-black text-sm">
-                <p className="font-bold">CONSEQUENCE:</p>
-                
-                {confirmAction === 'DEACTIVATE' ? (
-                  <p>
-                    This will leave the following scope <b>WITHOUT</b> an active academic year. Users may not be able to access current semester data.
-                  </p>
-                ) : (
-                  <p>This will automatically <b>DEACTIVATE</b> the current active year for:</p>
-                )}
-                
-                <p className="font-mono mt-1 underline decoration-2">
-                   {confirmAction === 'CREATE' 
-                     ? (form.department_id ? getDeptName(form.department_id) : 'THE ENTIRE UNIVERSITY')
-                     : (targetYear?.department_id ? getDeptName(targetYear.department_id) : 'THE ENTIRE UNIVERSITY')
-                   }
-                </p>
-              </div>
+            <p className="font-medium text-black mb-4 text-sm">
+              Are you sure you want to <b>{yearToToggle.is_active ? 'DEACTIVATE' : 'ACTIVATE'}</b> this academic year?
+              {yearToToggle.is_active && (
+                 <><br/><br/><span className="text-red-600 font-bold">WARNING:</span> Deactivating this year will automatically deactivate all semesters associated with it!</>
+              )}
+            </p>
+            <div className="p-4 bg-gray-100 border-2 border-black mb-8">
+              <span className="block font-black text-xl">{yearToToggle.name}</span>
+              <span className="block text-xs font-bold text-gray-500 mt-1 uppercase">{yearToToggle.department_name}</span>
             </div>
-
             <div className="flex gap-4">
-              <button 
-                onClick={() => { setShowConfirm(false); setTargetYear(null); }}
-                className="flex-1 py-4 font-bold border-2 border-black hover:bg-gray-100 transition-colors uppercase tracking-widest"
-              >
-                Cancel
+              <button onClick={() => { setShowStatusConfirm(false); setYearToToggle(null); }} className="flex-1 py-4 font-bold border-2 border-black hover:bg-gray-100 transition-colors uppercase tracking-widest" type="button">Cancel</button>
+              <button onClick={confirmToggle} type="button" className={`flex-1 py-4 text-white font-bold border-2 border-black transition-transform active:translate-y-1 uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${yearToToggle.is_active ? 'bg-red-600 hover:bg-red-700' : 'bg-black hover:bg-gray-800'}`}>
+                {yearToToggle.is_active ? 'Deactivate' : 'Activate'}
               </button>
-              <button 
-                onClick={handleConfirmClick}
-                disabled={loading}
-                className="flex-1 py-4 bg-black text-white font-bold border-2 border-black hover:bg-gray-800 transition-transform active:translate-y-1 uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
-              >
-                {loading ? "..." : "Confirm"}
-              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =======================
+          DELETE CONFIRMATION MODAL 
+      ======================== */}
+      {showDeleteConfirm && yearToDelete && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white border-4 border-black shadow-[12px_12px_0px_0px_rgba(255,255,255,0.2)] max-w-md w-full p-8">
+            <div className="flex items-center gap-4 mb-6 text-red-600 border-b-2 border-black pb-4">
+              <AlertTriangle size={36} strokeWidth={2.5} />
+              <h2 className="text-2xl font-black uppercase text-black">Confirm Deletion</h2>
+            </div>
+            <p className="font-medium text-black mb-4 text-sm">
+              Are you sure you want to delete this academic year? 
+              <br/><br/><span className="text-red-600 font-bold">WARNING:</span> This may permanently delete all semesters, classes, and data associated with it!
+            </p>
+            <div className="p-4 bg-gray-100 border-2 border-black mb-8">
+              <span className="block font-black text-xl">{yearToDelete.name}</span>
+              <span className="block text-xs font-bold text-gray-500 mt-1 uppercase">{yearToDelete.department_name}</span>
+            </div>
+            <div className="flex gap-4">
+              <button onClick={() => { setShowDeleteConfirm(false); setYearToDelete(null); }} className="flex-1 py-4 font-bold border-2 border-black hover:bg-gray-100 transition-colors uppercase tracking-widest" type="button">Cancel</button>
+              <button onClick={confirmDelete} type="button" className="flex-1 py-4 bg-red-600 text-white font-bold border-2 border-black hover:bg-red-700 transition-transform active:translate-y-1 uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">Delete</button>
             </div>
           </div>
         </div>
