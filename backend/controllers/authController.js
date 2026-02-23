@@ -1,6 +1,10 @@
 const pool = require('../config/db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const fs = require('fs');
+
+// 🔴 THIS IS THE FIX: Importing the AI Service function
+const { generateFaceEmbedding } = require('../services/aiService');
 
 const lookupUser = async (req, res) => {
     const { enrollment_number } = req.body;
@@ -92,7 +96,7 @@ const loginUser = async (req, res) => {
 
         jwt.sign(
             payload, 
-            process.env.JWT_SECRET || 'secret123', // Store this in .env later
+            process.env.JWT_SECRET || 'secret123', 
             { expiresIn: '10h' }, 
             (err, token) => {
                 if (err) throw err;
@@ -111,17 +115,21 @@ const uploadFace = async (req, res) => {
     const file = req.file;
 
     if (!file) {
-        return res.status(400).json({ error: "No image captured." });
+        return res.status(400).json({ error: "No image received." });
     }
 
     try {
-        // Construct file URL (adjust domain as needed)
-        const fileUrl = `http://localhost:5000/uploads/${file.filename}`;
+        // 1. Send the file (now sitting in your uploads/ folder) to Python to get the math array
+        const faceEmbedding = await generateFaceEmbedding(file.path);
 
+        // 2. Save the math array into PostgreSQL
         const result = await pool.query(
-            'UPDATE users SET face_image_url = $1 WHERE enrollment_number = $2 RETURNING name, face_image_url',
-            [fileUrl, enrollment_number]
+            'UPDATE users SET face_embedding = $1 WHERE enrollment_number = $2 RETURNING name',
+            [faceEmbedding, enrollment_number]
         );
+
+        // 3. Delete the temporary physical image from your uploads/ folder to save space
+        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
 
         if (result.rows.length === 0) {
             return res.status(404).json({ error: "User not found." });
@@ -130,8 +138,12 @@ const uploadFace = async (req, res) => {
         res.json({ message: "Face registered successfully!", data: result.rows[0] });
 
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send("Server Error");
+        // Always clean up the physical file if an error happens
+        if (file && fs.existsSync(file.path)) fs.unlinkSync(file.path);
+        
+        console.error("Face Upload Error:", err.message);
+        // We return status 400 so the React frontend can show the specific AI error (e.g. "No face found")
+        res.status(400).json({ error: err.message }); 
     }
 };
 

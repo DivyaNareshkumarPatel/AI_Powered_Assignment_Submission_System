@@ -1,16 +1,18 @@
 import os
 import shutil
 import fitz  # PyMuPDF
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uuid
 import uvicorn
 import re
+import json
 from dotenv import load_dotenv
 
 # Import our custom modules
 from ai_model import grader
-from face_recognition import register_student_face, verify_student_face
+from face_recognition import generate_face_embedding, verify_student_face
 
 # Load environment variables
 load_dotenv()
@@ -30,24 +32,36 @@ print("✅ SYSTEM READY! MODULAR GRADING API ACTIVE.")
 # 🌐 FASTAPI ENDPOINTS
 # =====================================================
 
-@app.post("/register-face")
-async def register_face(student_id: str = Form(...), image: UploadFile = File(...)):
-    image_bytes = await image.read()
-    result = register_student_face(student_id, image_bytes)
-    return result
+@app.post("/generate_embedding")
+async def register_face(file: UploadFile = File(...)):
+    """
+    Called by Node.js during student registration to get the mathematical face array.
+    """
+    image_bytes = await file.read()
+    result = generate_face_embedding(image_bytes)
+    
+    if result.get("status") == "ERROR":
+        raise HTTPException(status_code=400, detail=result.get("message"))
+        
+    return JSONResponse(content={"embedding": result.get("embedding")})
 
 @app.post("/grade")
 async def grade(
     question: str = Form(...), 
     user_text: str = Form(...), 
     correct_answer: str = Form(...),
-    student_id: str = Form(...), 
+    stored_embedding: str = Form(...), # Changed from student_id to stored_embedding!
     image: UploadFile = File(...) 
 ):
+    """
+    Grading endpoint that also simultaneously verifies the face.
+    """
     try:
-        # 1. Face Verification
+        # 1. Face Verification (Stateless)
+        # Parse the JSON string array sent by Node.js back into a Python list
+        embedding_list = json.loads(stored_embedding)
         image_bytes = await image.read()
-        face_status = verify_student_face(student_id, image_bytes)
+        face_status = verify_student_face(embedding_list, image_bytes)
 
         # 2. AI Grading
         grading_result = grader.get_score(question, user_text, correct_answer)
@@ -84,6 +98,9 @@ async def grade(
 
 @app.post("/process-pdf")
 async def process_pdf(file: UploadFile = File(...)):
+    """
+    Extracts Question/Answer pairs from a PDF.
+    """
     unique_filename = f"temp_{uuid.uuid4()}.pdf"
     try:
         with open(unique_filename, "wb") as buffer:
