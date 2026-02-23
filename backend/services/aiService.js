@@ -24,6 +24,25 @@ const generateFaceEmbedding = async (imageFilePath) => {
     }
 };
 
+const parseAssignmentPDF = async (pdfFilePath) => {
+    try {
+        const form = new FormData();
+        form.append('file', fs.createReadStream(pdfFilePath));
+
+        const response = await axios.post(`${PYTHON_API_URL}/process-pdf`, form, {
+            headers: { ...form.getHeaders() }
+        });
+        
+        // Returns the array of objects: [{ question: "...", answer: "..." }]
+        return response.data; 
+    } catch (error) {
+        console.error("AI Server Error (PDF Parse):", error.message);
+        // We return an empty array so if parsing fails, the assignment still uploads successfully
+        return []; 
+    }
+};
+
 module.exports = {
-    generateFaceEmbedding
+    generateFaceEmbedding,
+    parseAssignmentPDF
 };
