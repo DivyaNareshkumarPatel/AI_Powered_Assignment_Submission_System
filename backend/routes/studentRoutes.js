@@ -6,8 +6,11 @@ const {
     getPendingAssignments, 
     getStudentHistory, 
     submitAssignment,
-    continuousFaceCheck, // Import the new function
-    getStudentSubmissionDetails
+    continuousFaceCheck,
+    getStudentSubmissionDetails,
+    startVivaSession,      // 🔴 NEW
+    submitVivaAnswer,      // 🔴 NEW
+    finalizeViva           // 🔴 NEW
 } = require('../controllers/studentController');
 
 router.get('/pending', auth, getPendingAssignments);
@@ -17,7 +20,14 @@ router.get('/submissions/:submission_id/details', auth, getStudentSubmissionDeta
 // Upload PDF Assignment
 router.post('/submit', auth, upload.single('submission_file'), submitAssignment);
 
-// Upload Webcam Frame for continuous verification
+// Background Verification 
 router.post('/verify-face', auth, upload.single('frame'), continuousFaceCheck);
+
+// ==============================
+// 🔴 NEW: AI VIVA TEST ROUTES
+// ==============================
+router.post('/viva/start', auth, startVivaSession);
+router.post('/viva/answer', auth, upload.single('frame'), submitVivaAnswer); // Includes image frame for grading verification
+router.post('/viva/finalize', auth, upload.single('video'), finalizeViva);
 
 module.exports = router;

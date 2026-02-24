@@ -3,8 +3,6 @@ import numpy as np
 from deepface import DeepFace
 from scipy.spatial.distance import cosine
 
-# Note: We completely removed the in-memory 'registered_faces' dictionary!
-
 def decode_image_bytes(image_bytes: bytes):
     """Helper function to convert raw bytes into an OpenCV image array."""
     nparr = np.frombuffer(image_bytes, np.uint8)
@@ -13,12 +11,10 @@ def decode_image_bytes(image_bytes: bytes):
 def generate_face_embedding(image_bytes: bytes) -> dict:
     """
     Extracts a face from the image and returns its mathematical embedding.
-    Node.js will save this embedding in the PostgreSQL database.
     """
     try:
         img = decode_image_bytes(image_bytes)
         
-        # Extract the face embedding using Facenet (creates a 512-dimensional vector)
         embedding_objs = DeepFace.represent(
             img_path=img, 
             model_name="Facenet", 
@@ -29,9 +25,7 @@ def generate_face_embedding(image_bytes: bytes) -> dict:
         if len(embedding_objs) > 1:
             return {"status": "ERROR", "message": "Multiple faces detected! Please ensure only the student is in the frame."}
             
-        # Get the actual embedding array
         embedding = embedding_objs[0]["embedding"]
-        
         return {"status": "SUCCESS", "embedding": embedding}
         
     except ValueError:
@@ -53,10 +47,14 @@ def verify_student_face(stored_embedding: list, live_image_bytes: bytes) -> str:
             enforce_detection=True, 
             detector_backend="opencv"
         )
+        
+        # 🔴 NEW: STRICT MULTIPLE FACE DETECTION
+        if len(live_embedding_objs) > 1:
+            return "MULTIPLE_FACES"
+            
         live_embedding = live_embedding_objs[0]["embedding"]
         
-        # 2. Compare the live embedding with the stored embedding from the database
-        # We use Cosine Distance. For Facenet, a distance < 0.40 is generally a match.
+        # 2. Compare embeddings
         distance = cosine(stored_embedding, live_embedding)
         threshold = 0.40 
         

@@ -366,4 +366,25 @@ export const bulkUploadUsers = async (file, uploadData) => {
     return response.data;
 };
 
+export const startVivaSession = async (submissionId) => {
+    const response = await api.post('/student/viva/start', { submission_id: submissionId });
+    return response.data;
+};
+
+export const submitVivaAnswer = async (formData) => {
+    // Requires multipart/form-data because we are sending the webcam frame with the text answer
+    const response = await api.post('/student/viva/answer', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+};
+
+export const finalizeVivaSession = async (formData) => {
+    // Requires multipart/form-data because we are uploading the session video .webm file
+    const response = await api.post('/student/viva/finalize', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+};
+
 export default api;

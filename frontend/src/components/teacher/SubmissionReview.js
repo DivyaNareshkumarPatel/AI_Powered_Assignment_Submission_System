@@ -244,32 +244,55 @@ export default function SubmissionReview() {
                             vivaDetails?.vivaSession ? (
                                 <div className="space-y-6">
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        <ScoreCard label="Integrity Score" value={vivaDetails.vivaSession.integrity_score} color={vivaDetails.vivaSession.integrity_score > 70 ? "green" : "red"} icon={<ShieldAlert size={16} />} />
-                                        <ScoreCard label="Face Match" value={vivaDetails.vivaSession.face_match_score} color={vivaDetails.vivaSession.face_match_score > 80 ? "green" : "orange"} icon={<CheckCircle size={16} />} />
+                                        <ScoreCard label="Integrity Score" value={vivaDetails.vivaSession.integrity_score || 100} color={vivaDetails.vivaSession.integrity_score > 70 ? "green" : "red"} icon={<ShieldAlert size={16} />} />
+                                        <ScoreCard label="Face Match" value={vivaDetails.vivaSession.face_match_score || 100} color={vivaDetails.vivaSession.face_match_score > 80 ? "green" : "orange"} icon={<CheckCircle size={16} />} />
                                         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-                                            <div className="flex items-center gap-2 text-slate-500 mb-2"><Video size={16} /><span className="text-xs font-semibold uppercase">Session Video</span></div>
-                                            {vivaDetails.vivaSession.video_url ? <a href={vivaDetails.vivaSession.video_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-700 font-semibold text-sm">Watch Recording &rarr;</a> : <span className="text-slate-400 font-medium text-sm">Not Available</span>}
+                                            <div className="flex items-center gap-2 text-slate-500 mb-2"><Video size={16} /><span className="text-xs font-semibold uppercase tracking-wider">Session Video</span></div>
+                                            {vivaDetails.vivaSession.video_url ? <a href={vivaDetails.vivaSession.video_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-700 font-bold text-sm">Watch Recording &rarr;</a> : <span className="text-slate-400 font-medium text-sm">Not Available</span>}
                                         </div>
                                     </div>
-                                    {vivaDetails.aiReport && (
-                                        <div className="bg-indigo-50 p-5 rounded-xl border border-indigo-100">
-                                            <h4 className="font-bold text-indigo-900 text-sm mb-2 flex items-center gap-2"><Bot size={18} /> AI Feedback Summary</h4>
-                                            <p className="text-sm font-medium text-indigo-800 leading-relaxed">{JSON.stringify(vivaDetails.aiReport.feedback_json) || "No summary available."}</p>
-                                        </div>
-                                    )}
+                                    
                                     <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
                                         <div className="bg-slate-50 px-5 py-3 border-b border-slate-100 flex items-center gap-2">
                                             <MessageSquare size={16} className="text-slate-500" />
                                             <h4 className="font-bold text-slate-700 text-sm">Viva Question Log</h4>
                                         </div>
-                                        <div className="p-5 space-y-6 max-h-60 overflow-y-auto">
-                                            {vivaDetails.vivaLogs && vivaDetails.vivaLogs.length > 0 ? vivaDetails.vivaLogs.map((log, i) => (
-                                                <div key={i} className="border-b border-slate-100 pb-5 last:border-0 last:pb-0">
-                                                    <p className="font-bold text-slate-900 text-sm mb-2"><span className="text-blue-500 mr-2">Q{i+1}.</span>{log.question_text}</p>
-                                                    <p className="text-sm font-medium text-slate-600 pl-6 border-l-2 border-slate-200 italic py-1 bg-slate-50 rounded-r-lg">"{log.student_answer_transcript || "No answer detected"}"</p>
-                                                    {log.ai_evaluation && <div className="mt-3 ml-6 text-xs bg-slate-800 text-white px-3 py-2 rounded-lg font-medium inline-block"><Bot size={12} className="inline mr-1.5" /> <b>AI Eval:</b> {log.ai_evaluation.feedback || "Verified"}</div>}
+                                        <div className="p-5 space-y-6 max-h-96 overflow-y-auto">
+                                            {vivaDetails.vivaLogs && vivaDetails.vivaLogs.length > 0 ? vivaDetails.vivaLogs.map((log, i) => {
+                                                let aiEval = log.ai_evaluation;
+                                                // Handle potential stringified JSON
+                                                if (typeof aiEval === 'string') {
+                                                    try { aiEval = JSON.parse(aiEval); } catch(e) {}
+                                                }
+
+                                                return (
+                                                <div key={i} className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                                                    {/* The Question */}
+                                                    <h5 className="font-bold text-slate-900 mb-3 text-sm leading-relaxed">
+                                                        <span className="text-blue-600 mr-2">Q{i+1}.</span>{log.question_text}
+                                                    </h5>
+                                                    
+                                                    {/* Student's Answer */}
+                                                    <div className="mb-4 pl-6 border-l-2 border-slate-300">
+                                                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 block">Student's Answer</span>
+                                                        <p className="text-sm font-medium text-slate-700 bg-white p-3 rounded-xl border border-slate-100 shadow-sm italic">
+                                                            "{log.student_answer_transcript || "No answer provided"}"
+                                                        </p>
+                                                    </div>
+                                                    
+                                                    {/* AI Evaluation */}
+                                                    {aiEval && (
+                                                        <div className="pl-6 border-l-2 border-indigo-200">
+                                                            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 mb-1 flex items-center gap-1">
+                                                                <Bot size={12}/> AI Feedback
+                                                            </span>
+                                                            <p className="text-sm font-medium text-indigo-900 bg-indigo-50/50 p-3 rounded-xl border border-indigo-100 shadow-sm">
+                                                                {aiEval.feedback || "Verified by AI"}
+                                                            </p>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            )) : <p className="text-slate-400 font-medium text-sm text-center">No logs found.</p>}
+                                            )}) : <p className="text-slate-400 font-medium text-sm text-center">No logs found.</p>}
                                         </div>
                                     </div>
                                 </div>
@@ -285,7 +308,7 @@ export default function SubmissionReview() {
                     {/* Footer */}
                     <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
                         <button onClick={() => setSelectedSubmission(null)} className="px-6 py-2.5 text-slate-600 font-semibold hover:bg-slate-200 rounded-lg transition-colors text-sm">Close</button>
-                        {!isReadOnly && (
+                        {!isReadOnly && modalTab === 'grading' && (
                             <button onClick={handleSaveGrade} disabled={saving} className="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-70 shadow-sm text-sm">
                                 {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />} Save Grade
                             </button>

@@ -27,7 +27,7 @@ export default function StudentResults() {
         loadSubmissions();
     }, []);
 
-    // 🔴 FILTER: ONLY KEEP CURRENT ACTIVE YEAR/SEM
+    // Filter to only active semester
     const activeSubmissions = useMemo(() => submissions.filter(s => s.is_active_year === true), [submissions]);
     
     const availableSemesters = useMemo(() => [...new Set(activeSubmissions.map(s => s.semester_name))].filter(Boolean).sort(), [activeSubmissions]);
@@ -132,10 +132,11 @@ export default function StudentResults() {
                 )}
             </div>
 
-            {/* Modal exactly as before... */}
+            {/* --- REPORT CARD MODAL --- */}
             {selectedSubmission && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in zoom-in duration-200">
                     <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
+                        
                         <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-white">
                             <div>
                                 <h3 className="text-xl font-bold text-slate-900">{selectedSubmission.title || "Assignment Report"}</h3>
@@ -145,6 +146,7 @@ export default function StudentResults() {
                         </div>
 
                         <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50 space-y-6">
+                            
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="bg-emerald-50 border border-emerald-100 p-6 rounded-2xl flex flex-col justify-center items-center shadow-sm">
                                     <Award className="text-emerald-300 w-12 h-12 mb-2" />
@@ -152,6 +154,7 @@ export default function StudentResults() {
                                     <span className="text-5xl font-black text-emerald-700">{selectedSubmission.final_score || "-"}</span>
                                     <span className="text-sm font-medium text-emerald-600/70 mt-1">out of 100</span>
                                 </div>
+                                
                                 <div className="md:col-span-2 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm flex flex-col justify-between">
                                     <div>
                                         <h4 className="font-bold text-slate-900 mb-3 flex items-center gap-2">
@@ -177,8 +180,8 @@ export default function StudentResults() {
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         {details.vivaSession ? (
                                             <>
-                                                <ScoreCard label="Integrity Score" value={details.vivaSession.integrity_score} color={details.vivaSession.integrity_score > 70 ? "green" : "red"} icon={<ShieldAlert size={16}/>} />
-                                                <ScoreCard label="Face Match" value={details.vivaSession.face_match_score} color={details.vivaSession.face_match_score > 80 ? "green" : "orange"} icon={<CheckCircle size={16}/>} />
+                                                <ScoreCard label="Integrity Score" value={details.vivaSession.integrity_score || 100} color={details.vivaSession.integrity_score > 70 ? "green" : "red"} icon={<ShieldAlert size={16}/>} />
+                                                <ScoreCard label="Face Match" value={details.vivaSession.face_match_score || 100} color={details.vivaSession.face_match_score > 80 ? "green" : "orange"} icon={<CheckCircle size={16}/>} />
                                                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center items-center text-center">
                                                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1"><Video size={14}/> Session Video</p>
                                                     {details.vivaSession.video_url ? (
@@ -193,28 +196,45 @@ export default function StudentResults() {
                                         )}
                                     </div>
 
-                                    {details.aiReport && (
-                                        <div className="bg-indigo-50 p-5 rounded-xl border border-indigo-100 shadow-sm">
-                                            <h4 className="font-bold text-indigo-900 text-sm mb-2">AI Grading Summary</h4>
-                                            <p className="text-sm font-medium text-indigo-800 leading-relaxed">
-                                                {JSON.stringify(details.aiReport.feedback_json) || "No summary available."}
-                                            </p>
-                                        </div>
-                                    )}
-
                                     {details.vivaLogs && details.vivaLogs.length > 0 && (
                                         <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
                                             <div className="bg-slate-50 px-5 py-3 border-b border-slate-100 flex items-center gap-2">
                                                 <MessageSquare size={16} className="text-slate-500" />
                                                 <h4 className="font-bold text-slate-700 text-sm">Viva Question Log</h4>
                                             </div>
-                                            <div className="p-5 space-y-5 max-h-60 overflow-y-auto">
-                                                {details.vivaLogs.map((log, i) => (
-                                                    <div key={i} className="border-b border-slate-100 pb-5 last:border-0 last:pb-0">
-                                                        <p className="font-bold text-slate-900 text-sm mb-2"><span className="text-blue-500 mr-2">Q{i+1}.</span>{log.question_text}</p>
-                                                        <p className="text-sm font-medium text-slate-600 pl-6 border-l-2 border-slate-200 italic py-1 bg-slate-50 rounded-r-lg">"{log.student_answer_transcript || "No answer detected"}"</p>
+                                            <div className="p-5 space-y-6 max-h-96 overflow-y-auto">
+                                                {details.vivaLogs.map((log, i) => {
+                                                    let aiEval = log.ai_evaluation;
+                                                    // Ensure JSON is parsed correctly for rendering
+                                                    if (typeof aiEval === 'string') {
+                                                        try { aiEval = JSON.parse(aiEval); } catch(e) {}
+                                                    }
+                                                    
+                                                    return (
+                                                    <div key={i} className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                                                        <h5 className="font-bold text-slate-900 mb-3 text-sm leading-relaxed">
+                                                            <span className="text-blue-600 mr-2">Q{i+1}.</span>{log.question_text}
+                                                        </h5>
+                                                        
+                                                        <div className="mb-4 pl-6 border-l-2 border-slate-300">
+                                                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 block">My Answer</span>
+                                                            <p className="text-sm font-medium text-slate-700 bg-white p-3 rounded-xl border border-slate-100 shadow-sm italic">
+                                                                "{log.student_answer_transcript || "No answer provided"}"
+                                                            </p>
+                                                        </div>
+                                                        
+                                                        {aiEval && (
+                                                            <div className="pl-6 border-l-2 border-indigo-200">
+                                                                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 mb-1 flex items-center gap-1">
+                                                                    <Bot size={12}/> AI Feedback
+                                                                </span>
+                                                                <p className="text-sm font-medium text-indigo-900 bg-indigo-50/50 p-3 rounded-xl border border-indigo-100 shadow-sm">
+                                                                    {aiEval.feedback || "Verified by AI"}
+                                                                </p>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                ))}
+                                                )})}
                                             </div>
                                         </div>
                                     )}
@@ -224,6 +244,7 @@ export default function StudentResults() {
                     </div>
                 </div>
             )}
+
             <PDFViewer isOpen={!!viewPdf} onClose={() => setViewPdf(null)} fileUrl={viewPdf?.url} title={viewPdf?.title} />
         </div>
     );

@@ -126,6 +126,32 @@ async def process_pdf(file: UploadFile = File(...)):
         print(f"PDF Error: {e}")
         return []
 
+# =====================================================
+# 🔴 THIS WAS MISSING! Add this right here!
+# =====================================================
+@app.post("/verify_face")
+async def verify_face(
+    stored_embedding: str = Form(...),
+    image: UploadFile = File(...)
+):
+    """
+    Dedicated endpoint for continuous background face checking during the Viva.
+    """
+    try:
+        # Parse the JSON string sent by Node.js back into a Python list
+        embedding_list = json.loads(stored_embedding)
+        image_bytes = await image.read()
+        
+        # Compare them using deepface!
+        face_status = verify_student_face(embedding_list, image_bytes)
+        
+        return {"status": face_status}
+    except Exception as e:
+        print(f"Verify Face Route Error: {e}")
+        return {"status": "ERROR"}
+
+# =====================================================
+
 if __name__ == "__main__":
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", 8000))
