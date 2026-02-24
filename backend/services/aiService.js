@@ -42,7 +42,26 @@ const parseAssignmentPDF = async (pdfFilePath) => {
     }
 };
 
+const verifyStudentFace = async (storedEmbedding, imageBuffer) => {
+    try {
+        const form = new FormData();
+        form.append('stored_embedding', JSON.stringify(storedEmbedding));
+        // Pass the raw buffer directly with a fake filename so Python treats it as an UploadFile
+        form.append('image', imageBuffer, { filename: 'frame.jpg', contentType: 'image/jpeg' });
+
+        const response = await axios.post(`${PYTHON_API_URL}/verify_face`, form, {
+            headers: { ...form.getHeaders() }
+        });
+        
+        return response.data; // Returns { status: "OK" | "NO_FACE" | "WRONG_PERSON" }
+    } catch (error) {
+        console.error("AI Server Error (Face Verify):", error.message);
+        throw error;
+    }
+};
+
 module.exports = {
     generateFaceEmbedding,
-    parseAssignmentPDF
+    parseAssignmentPDF,
+    verifyStudentFace
 };

@@ -125,6 +125,16 @@ export const fetchStudentHistory = async () => {
     return response.data;
 };
 
+export const verifyActiveFace = async (imageBlob) => {
+    const formData = new FormData();
+    formData.append('frame', imageBlob, 'frame.jpg');
+
+    const response = await api.post('/student/verify-face', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+};
+
 export const submitAssignment = async (formData) => {
     const response = await api.post('/student/submit', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }

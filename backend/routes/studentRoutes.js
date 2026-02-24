@@ -4,17 +4,20 @@ const upload = require('../middleware/upload');
 const auth = require('../middleware/auth');
 const { 
     getPendingAssignments, 
-    getStudentSubmissions, 
+    getStudentHistory, 
     submitAssignment,
+    continuousFaceCheck, // Import the new function
     getStudentSubmissionDetails
 } = require('../controllers/studentController');
 
-// All routes require Login
 router.get('/pending', auth, getPendingAssignments);
-router.get('/history', auth, getStudentSubmissions);
+router.get('/history', auth, getStudentHistory);
 router.get('/submissions/:submission_id/details', auth, getStudentSubmissionDetails);
 
-// Upload: 'submission_file' is the key name for the form
+// Upload PDF Assignment
 router.post('/submit', auth, upload.single('submission_file'), submitAssignment);
+
+// Upload Webcam Frame for continuous verification
+router.post('/verify-face', auth, upload.single('frame'), continuousFaceCheck);
 
 module.exports = router;
