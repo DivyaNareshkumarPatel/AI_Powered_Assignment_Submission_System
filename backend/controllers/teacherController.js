@@ -131,22 +131,23 @@ const getSubmissionDetails = async (req, res) => {
     try {
         const { submission_id } = req.params;
 
-        const sessionResult = await pool.query(`SELECT * FROM viva_sessions WHERE submission_id = $1`, [submission_id]);
-        const vivaSession = sessionResult.rows[0] || null;
+        // 🔴 FIX: Added "ORDER BY created_at DESC LIMIT 1" to get the latest session!
+        const sessionRes = await pool.query(`SELECT * FROM viva_sessions WHERE submission_id = $1 ORDER BY created_at DESC LIMIT 1`, [submission_id]);
+        const vivaSession = sessionRes.rows[0] || null;
 
         let vivaLogs = [];
         if (vivaSession) {
-            const logsResult = await pool.query(`SELECT * FROM viva_logs WHERE session_id = $1 ORDER BY created_at ASC`, [vivaSession.session_id]);
-            vivaLogs = logsResult.rows;
+            const logsRes = await pool.query(`SELECT * FROM viva_logs WHERE session_id = $1 ORDER BY created_at ASC`, [vivaSession.session_id]);
+            vivaLogs = logsRes.rows;
         }
 
-        const reportResult = await pool.query(`SELECT * FROM grading_reports WHERE submission_id = $1`, [submission_id]);
-        const aiReport = reportResult.rows[0] || null;
+        // 🔴 FIX: Added "ORDER BY created_at DESC LIMIT 1" here too!
+        const reportRes = await pool.query(`SELECT * FROM grading_reports WHERE submission_id = $1 ORDER BY created_at DESC LIMIT 1`, [submission_id]);
+        const aiReport = reportRes.rows[0] || null;
 
         res.json({ vivaSession, vivaLogs, aiReport });
-
     } catch (err) {
-        console.error("Error fetching details:", err.message);
+        console.error(err);
         res.status(500).send("Server Error");
     }
 };

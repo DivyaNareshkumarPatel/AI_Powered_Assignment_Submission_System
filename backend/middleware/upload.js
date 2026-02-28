@@ -65,28 +65,32 @@ const storage = multer.diskStorage({
     cb(null, 'uploads/'); // Save files to 'uploads' folder
   },
   filename: function (req, file, cb) {
-    // Save as: fieldname-timestamp.pdf
+    // Save as: fieldname-timestamp.extension
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
   }
 });
 
-// File Filter (Optional: Only accept PDFs and Docs)
+// File Filter (Accepts PDFs, Docs, Images, AND VIDEOS)
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = /pdf|doc|docx|jpg|jpeg|png/;
+  // 🔴 1. Added 'webm' and 'mp4' to the allowed extensions
+  const allowedTypes = /pdf|doc|docx|jpg|jpeg|png|webm|mp4/;
   const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowedTypes.test(file.mimetype);
+  
+  // 🔴 2. explicitly allow files where the mimetype starts with 'video/'
+  const mimetype = allowedTypes.test(file.mimetype) || file.mimetype.startsWith('video/');
 
   if (extname && mimetype) {
     return cb(null, true);
   } else {
-    cb(new Error('Only PDFs, Docs, and Images are allowed!'));
+    cb(new Error('Only PDFs, Docs, Images, and Videos (WebM/MP4) are allowed!'));
   }
 };
 
 const upload = multer({ 
   storage: storage,
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+  // 🔴 3. Increased limit to 50MB because video files are much larger than PDFs!
+  limits: { fileSize: 50 * 1024 * 1024 } 
 });
 
 module.exports = upload;

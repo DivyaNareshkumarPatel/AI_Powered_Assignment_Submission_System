@@ -1,8 +1,6 @@
 const pool = require('../config/db');
 const fs = require('fs');
-const { parseAssignmentPDF } = require('../services/aiService');
-const { verifyStudentFace } = require('../services/aiService');
-const { evaluateVivaAnswer } = require('../services/aiService');
+const { parseAssignmentPDF, verifyStudentFace, evaluateVivaAnswer } = require('../services/aiService');
 
 const getPendingAssignments = async (req, res) => {
     const student_id = req.user.id;
@@ -43,7 +41,6 @@ const getPendingAssignments = async (req, res) => {
     }
 };
 
-// 🔴 RENAMED THIS FROM getStudentSubmissions TO getStudentHistory
 const getStudentHistory = async (req, res) => {
     const student_id = req.user.id;
     try {
@@ -76,29 +73,24 @@ const submitAssignment = async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No PDF file uploaded." });
 
     try {
-        // 1. Fetch the Teacher's expected Q&A count
         const asgCheck = await pool.query('SELECT parsed_qa FROM assignments WHERE assignment_id = $1', [assignment_id]);
         if (asgCheck.rows.length === 0) throw new Error("Assignment not found.");
 
         const teacherQA = asgCheck.rows[0].parsed_qa || [];
         const expectedCount = teacherQA.length;
 
-        // 2. Parse the Student's newly uploaded PDF
         const studentPath = req.file.path;
         console.log("Analyzing Student PDF format...");
         const studentQA = await parseAssignmentPDF(studentPath);
         const actualCount = studentQA.length;
 
-        // 3. Strict Validation
         if (expectedCount > 0 && actualCount !== expectedCount) {
-            // Delete the invalid file from the server
             fs.unlinkSync(studentPath);
             return res.status(400).json({
-                error: `Format Mismatch! The teacher assigned ${expectedCount} questions, but we detected ${actualCount} answers in your PDF. Please use the standard 'Q1: ... A1: ...' format and ensure all questions are answered.`
+                error: `Format Mismatch! The teacher assigned ${expectedCount} questions, but we detected ${actualCount} answers in your PDF.`
             });
         }
 
-        // 4. If valid, save it to the database!
         const BASE_URL = process.env.BASE_URL || 'http://localhost:5000/';
         const file_url = BASE_URL + studentPath.replace(/\\/g, "/");
 
@@ -108,17 +100,15 @@ const submitAssignment = async (req, res) => {
             [assignment_id, student_id, file_url]
         );
 
-        // Return success and pass the submission_id so the frontend can start the Viva!
         res.json({ message: "PDF Validated!", submission_id: result.rows[0].submission_id });
 
     } catch (err) {
-        if (req.file) fs.unlinkSync(req.file.path); // Cleanup on error
+        if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
         console.error("Submission Error:", err);
         res.status(500).json({ error: "Server error during submission." });
     }
 };
 
-// --- NEW: Continuous Face Verification Endpoint ---
 const continuousFaceCheck = async (req, res) => {
     const student_id = req.user.id;
     const file = req.file;
@@ -126,29 +116,23 @@ const continuousFaceCheck = async (req, res) => {
     if (!file) return res.status(400).json({ error: "No frame captured." });
 
     try {
-        // 1. Get the student's stored mathematical face embedding
         const userCheck = await pool.query('SELECT face_embedding FROM users WHERE user_id = $1', [student_id]);
         const storedEmbedding = userCheck.rows[0]?.face_embedding;
 
         if (!storedEmbedding) {
-            fs.unlinkSync(file.path);
+            if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
             return res.status(400).json({ error: "No registered face found." });
         }
 
-        // 2. Read the image frame directly into a buffer
         const imageBuffer = fs.readFileSync(file.path);
-
-        // 3. Send it to Python for comparison
         const aiResponse = await verifyStudentFace(storedEmbedding, imageBuffer);
 
-        // Cleanup the temporary webcam frame immediately
-        fs.unlinkSync(file.path);
+        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
 
-        // Expected aiResponse.status: "OK", "WRONG_PERSON", "NO_FACE"
         res.json({ face_status: aiResponse.status });
 
     } catch (err) {
-        if (file) fs.unlinkSync(file.path);
+        if (file && fs.existsSync(file.path)) fs.unlinkSync(file.path);
         console.error("Face Check Error:", err.message);
         res.status(500).json({ error: "Face check failed." });
     }
@@ -157,12 +141,13 @@ const continuousFaceCheck = async (req, res) => {
 const getStudentSubmissionDetails = async (req, res) => {
     try {
         const { submission_id } = req.params;
-        const student_id = req.user.id;
+        const student_id = req.user.id; 
 
         const submissionCheck = await pool.query(`SELECT * FROM submissions WHERE submission_id = $1 AND student_id = $2`, [submission_id, student_id]);
         if (submissionCheck.rows.length === 0) return res.status(403).json({ msg: "Unauthorized" });
 
-        const sessionResult = await pool.query(`SELECT * FROM viva_sessions WHERE submission_id = $1`, [submission_id]);
+        // ORDER BY created_at DESC ensures you always see your newest test!
+        const sessionResult = await pool.query(`SELECT * FROM viva_sessions WHERE submission_id = $1 ORDER BY created_at DESC LIMIT 1`, [submission_id]);
         const vivaSession = sessionResult.rows[0] || null;
 
         let vivaLogs = [];
@@ -171,7 +156,7 @@ const getStudentSubmissionDetails = async (req, res) => {
             vivaLogs = logsResult.rows;
         }
 
-        const reportResult = await pool.query(`SELECT * FROM grading_reports WHERE submission_id = $1`, [submission_id]);
+        const reportResult = await pool.query(`SELECT * FROM grading_reports WHERE submission_id = $1 ORDER BY created_at DESC LIMIT 1`, [submission_id]);
         const aiReport = reportResult.rows[0] || null;
 
         res.json({ vivaSession, vivaLogs, aiReport });
@@ -182,7 +167,7 @@ const getStudentSubmissionDetails = async (req, res) => {
     }
 };
 
-// 1. Start the Viva Session
+// 1. Start the Viva Session (🔴 FIXED FOR DUPLICATES)
 const startVivaSession = async (req, res) => {
     const { submission_id } = req.body;
     try {
@@ -195,7 +180,23 @@ const startVivaSession = async (req, res) => {
         );
         if (subQuery.rows.length === 0) return res.status(404).json({ error: "Submission not found" });
 
-        // Create the session in the database
+        // 🔴 PREVENT DUPLICATES: Check if an active session already exists!
+        const existingSession = await pool.query(
+            `SELECT session_id FROM viva_sessions 
+             WHERE submission_id = $1 AND ended_at IS NULL 
+             ORDER BY created_at DESC LIMIT 1`,
+            [submission_id]
+        );
+
+        if (existingSession.rows.length > 0) {
+            // Return the already created session instead of making a duplicate
+            return res.json({
+                session_id: existingSession.rows[0].session_id,
+                questions: subQuery.rows[0].parsed_qa
+            });
+        }
+
+        // If no active session exists, create a new one
         const session = await pool.query(
             `INSERT INTO viva_sessions (submission_id, started_at) VALUES ($1, CURRENT_TIMESTAMP) RETURNING session_id`,
             [submission_id]
@@ -211,47 +212,62 @@ const startVivaSession = async (req, res) => {
     }
 };
 
-// 2. Submit & Grade an individual answer
+// 🔴 THE BULLETPROOF FIX: This ensures data ALWAYS saves to PostgreSQL!
 const submitVivaAnswer = async (req, res) => {
     const { session_id, question, answer, correct_answer } = req.body;
-    const file = req.file; // Webcam frame taken at the moment of answering
+    const file = req.file;
 
     try {
         const userCheck = await pool.query('SELECT face_embedding FROM users WHERE user_id = $1', [req.user.id]);
         const storedEmbedding = userCheck.rows[0]?.face_embedding;
 
         if (!file || !storedEmbedding) {
-            if (file) fs.unlinkSync(file.path);
+            if (file && fs.existsSync(file.path)) fs.unlinkSync(file.path);
             return res.status(400).json({ error: "Missing webcam frame or face embedding" });
         }
 
         const imageBuffer = fs.readFileSync(file.path);
 
-        // 🔴 Send everything to Python API for grading & face verification!
-        const aiEvaluation = await evaluateVivaAnswer(question, answer, correct_answer, storedEmbedding, imageBuffer);
+        let aiEvaluation = { 
+            score: 0, 
+            feedback: "Processing...", 
+            face_status: "OK",
+            breakdown: {}
+        };
 
-        // Clean up image file
-        fs.unlinkSync(file.path);
+        try {
+            aiEvaluation = await evaluateVivaAnswer(question, answer, correct_answer, storedEmbedding, imageBuffer);
+        } catch (aiError) {
+            console.error("⚠️ Python AI Grading Error:", aiError.message);
+            aiEvaluation.feedback = "System Error: AI failed to analyze, but your answer was successfully recorded.";
+            aiEvaluation.face_status = "ERROR";
+        }
 
-        // Save the result in the viva_logs database table
+        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+
+        // ALWAYS INSERT INTO DATABASE NO MATTER WHAT!
         await pool.query(
             `INSERT INTO viva_logs (session_id, question_text, student_answer_transcript, ai_evaluation, is_satisfactory)
              VALUES ($1, $2, $3, $4, $5)`,
-            [session_id, question, answer, JSON.stringify(aiEvaluation), aiEvaluation.score >= 50]
+            [
+                session_id, 
+                question, 
+                answer || "No answer provided", 
+                JSON.stringify(aiEvaluation), 
+                aiEvaluation.score >= 50
+            ]
         );
 
         res.json({ success: true, evaluation: aiEvaluation, faceStatus: aiEvaluation.face_status });
 
     } catch (err) {
         if (file && fs.existsSync(file.path)) fs.unlinkSync(file.path);
-        console.error(err);
+        console.error("Critical Database Error in submitVivaAnswer:", err);
         res.status(500).json({ error: "Failed to process answer" });
     }
 };
 
-// 3. Finalize test and calculate total score
 const finalizeViva = async (req, res) => {
-    // We now receive scores and the video file from the frontend!
     const { session_id, submission_id, integrity_score, face_match_score } = req.body;
     const file = req.file; 
     
@@ -267,14 +283,15 @@ const finalizeViva = async (req, res) => {
         let totalScore = 0;
         logs.rows.forEach(log => {
             let evalData = log.ai_evaluation;
-            if (typeof evalData === 'string') evalData = JSON.parse(evalData);
+            if (typeof evalData === 'string') {
+                try { evalData = JSON.parse(evalData); } catch(e) {}
+            }
             totalScore += (evalData?.score || 0);
         });
         const averageScore = logs.rows.length > 0 ? (totalScore / logs.rows.length) : 0;
 
         const overallFeedback = { summary: "AI Evaluation complete." };
 
-        // 1. Close Session & SAVE VIDEO URL + PERCENTAGE SCORES
         await pool.query(
             `UPDATE viva_sessions 
              SET ended_at = CURRENT_TIMESTAMP, video_url = $1, integrity_score = $2, face_match_score = $3 
@@ -282,13 +299,11 @@ const finalizeViva = async (req, res) => {
             [video_url, integrity_score || 100, face_match_score || 100, session_id]
         );
 
-        // 2. Create the Grading Report
         await pool.query(
             `INSERT INTO grading_reports (submission_id, initial_score, feedback_json) VALUES ($1, $2, $3)`,
             [submission_id, averageScore, JSON.stringify(overallFeedback)]
         );
 
-        // 3. Update the Submission Status
         await pool.query(`UPDATE submissions SET status = 'AI_GRADED', final_score = $1 WHERE submission_id = $2`, [averageScore, submission_id]);
 
         res.json({ success: true, final_score: averageScore });
@@ -298,5 +313,4 @@ const finalizeViva = async (req, res) => {
     }
 };
 
-// 🔴 UPDATED EXPORTS TO MATCH
-module.exports = { getPendingAssignments, getStudentHistory, submitAssignment, getStudentSubmissionDetails, continuousFaceCheck , startVivaSession, submitVivaAnswer, finalizeViva };
+module.exports = { getPendingAssignments, getStudentHistory, submitAssignment, getStudentSubmissionDetails, continuousFaceCheck, startVivaSession, submitVivaAnswer, finalizeViva };

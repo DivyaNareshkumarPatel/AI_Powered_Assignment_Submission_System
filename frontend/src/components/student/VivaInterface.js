@@ -244,7 +244,7 @@ export default function VivaInterface({ submissionId, onComplete }) {
             <div className="w-full lg:w-80 flex flex-col gap-4">
                 <div className="relative w-full bg-black rounded-3xl overflow-hidden shadow-lg border-4 border-slate-800 aspect-video lg:aspect-auto">
                     {/* Audio MUST be true to record audio in the video! */}
-                    <Webcam ref={webcamRef} audio={true} screenshotFormat="image/jpeg" className="w-full h-full object-cover" />
+                    <Webcam ref={webcamRef} muted={true} audio={true} screenshotFormat="image/jpeg" className="w-full h-full object-cover" />
                     <div className="absolute top-3 left-3 bg-red-600 px-3 py-1.5 rounded-full flex items-center gap-2 z-30 animate-pulse"><div className="w-2 h-2 bg-white rounded-full"></div><span className="text-[10px] font-bold text-white uppercase tracking-widest">REC</span></div>
                 </div>
             </div>
