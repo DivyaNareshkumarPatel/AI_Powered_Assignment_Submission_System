@@ -38,13 +38,13 @@ const verifyStudentFace = async (storedEmbedding, imageBuffer) => {
     }
 };
 
-// 🔴 NEW: The actual Q&A Grading Function
-const evaluateVivaAnswer = async (question, userText, correctAnswer, storedEmbedding, imageBuffer) => {
+const evaluateVivaAnswer = async (question, userText, correctAnswer, storedEmbedding, imageBuffer, maxMarks = 10) => {
     try {
         const form = new FormData();
         form.append('question', question);
         form.append('user_text', userText || "No answer provided");
         form.append('correct_answer', correctAnswer);
+        form.append('max_marks', maxMarks);
         form.append('stored_embedding', JSON.stringify(storedEmbedding));
         form.append('image', imageBuffer, { filename: 'frame.jpg', contentType: 'image/jpeg' });
 
@@ -52,10 +52,8 @@ const evaluateVivaAnswer = async (question, userText, correctAnswer, storedEmbed
             headers: { ...form.getHeaders() }
         });
         
-        // Returns: { score, feedback, face_status, breakdown }
         return response.data; 
     } catch (error) {
-        console.error("AI Server Error (Grade):", error.message);
         throw new Error("Failed to evaluate answer.");
     }
 };

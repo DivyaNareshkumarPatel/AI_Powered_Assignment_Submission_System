@@ -36,7 +36,6 @@ const getPendingAssignments = async (req, res) => {
         res.json(result.rows);
 
     } catch (err) {
-        console.error(err.message);
         res.status(500).send("Server Error");
     }
 };
@@ -61,7 +60,6 @@ const getStudentHistory = async (req, res) => {
         );
         res.json(result.rows);
     } catch (err) {
-        console.error(err.message);
         res.status(500).send("Server Error");
     }
 };
@@ -80,7 +78,6 @@ const submitAssignment = async (req, res) => {
         const expectedCount = teacherQA.length;
 
         const studentPath = req.file.path;
-        console.log("Analyzing Student PDF format...");
         const studentQA = await parseAssignmentPDF(studentPath);
         const actualCount = studentQA.length;
 
@@ -104,7 +101,6 @@ const submitAssignment = async (req, res) => {
 
     } catch (err) {
         if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-        console.error("Submission Error:", err);
         res.status(500).json({ error: "Server error during submission." });
     }
 };
@@ -133,7 +129,6 @@ const continuousFaceCheck = async (req, res) => {
 
     } catch (err) {
         if (file && fs.existsSync(file.path)) fs.unlinkSync(file.path);
-        console.error("Face Check Error:", err.message);
         res.status(500).json({ error: "Face check failed." });
     }
 };
@@ -146,7 +141,6 @@ const getStudentSubmissionDetails = async (req, res) => {
         const submissionCheck = await pool.query(`SELECT * FROM submissions WHERE submission_id = $1 AND student_id = $2`, [submission_id, student_id]);
         if (submissionCheck.rows.length === 0) return res.status(403).json({ msg: "Unauthorized" });
 
-        // ORDER BY created_at DESC ensures you always see your newest test!
         const sessionResult = await pool.query(`SELECT * FROM viva_sessions WHERE submission_id = $1 ORDER BY created_at DESC LIMIT 1`, [submission_id]);
         const vivaSession = sessionResult.rows[0] || null;
 
@@ -162,16 +156,13 @@ const getStudentSubmissionDetails = async (req, res) => {
         res.json({ vivaSession, vivaLogs, aiReport });
 
     } catch (err) {
-        console.error(err.message);
         res.status(500).send("Server Error");
     }
 };
 
-// 1. Start the Viva Session (🔴 FIXED FOR DUPLICATES)
 const startVivaSession = async (req, res) => {
     const { submission_id } = req.body;
     try {
-        // Fetch the parsed Q&A data from the original assignment
         const subQuery = await pool.query(
             `SELECT a.parsed_qa FROM submissions s 
              JOIN assignments a ON s.assignment_id = a.assignment_id 
@@ -180,7 +171,6 @@ const startVivaSession = async (req, res) => {
         );
         if (subQuery.rows.length === 0) return res.status(404).json({ error: "Submission not found" });
 
-        // 🔴 PREVENT DUPLICATES: Check if an active session already exists!
         const existingSession = await pool.query(
             `SELECT session_id FROM viva_sessions 
              WHERE submission_id = $1 AND ended_at IS NULL 
@@ -189,14 +179,12 @@ const startVivaSession = async (req, res) => {
         );
 
         if (existingSession.rows.length > 0) {
-            // Return the already created session instead of making a duplicate
             return res.json({
                 session_id: existingSession.rows[0].session_id,
                 questions: subQuery.rows[0].parsed_qa
             });
         }
 
-        // If no active session exists, create a new one
         const session = await pool.query(
             `INSERT INTO viva_sessions (submission_id, started_at) VALUES ($1, CURRENT_TIMESTAMP) RETURNING session_id`,
             [submission_id]
@@ -207,14 +195,12 @@ const startVivaSession = async (req, res) => {
             questions: subQuery.rows[0].parsed_qa
         });
     } catch (err) {
-        console.error(err);
         res.status(500).json({ error: "Failed to start Viva session" });
     }
 };
 
-// 🔴 THE BULLETPROOF FIX: This ensures data ALWAYS saves to PostgreSQL!
 const submitVivaAnswer = async (req, res) => {
-    const { session_id, question, answer, correct_answer } = req.body;
+    const { session_id, question, answer, correct_answer, max_marks = 10 } = req.body;
     const file = req.file;
 
     try {
@@ -236,25 +222,23 @@ const submitVivaAnswer = async (req, res) => {
         };
 
         try {
-            aiEvaluation = await evaluateVivaAnswer(question, answer, correct_answer, storedEmbedding, imageBuffer);
+            aiEvaluation = await evaluateVivaAnswer(question, answer, correct_answer, storedEmbedding, imageBuffer, max_marks);
         } catch (aiError) {
-            console.error("⚠️ Python AI Grading Error:", aiError.message);
             aiEvaluation.feedback = "System Error: AI failed to analyze, but your answer was successfully recorded.";
             aiEvaluation.face_status = "ERROR";
         }
 
         if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
 
-        // ALWAYS INSERT INTO DATABASE NO MATTER WHAT!
+        // 🔴 UPDATED QUERY: Removed is_satisfactory and $5
         await pool.query(
-            `INSERT INTO viva_logs (session_id, question_text, student_answer_transcript, ai_evaluation, is_satisfactory)
-             VALUES ($1, $2, $3, $4, $5)`,
+            `INSERT INTO viva_logs (session_id, question_text, student_answer_transcript, ai_evaluation)
+             VALUES ($1, $2, $3, $4)`,
             [
                 session_id, 
                 question, 
                 answer || "No answer provided", 
-                JSON.stringify(aiEvaluation), 
-                aiEvaluation.score >= 50
+                JSON.stringify(aiEvaluation)
             ]
         );
 
@@ -262,7 +246,6 @@ const submitVivaAnswer = async (req, res) => {
 
     } catch (err) {
         if (file && fs.existsSync(file.path)) fs.unlinkSync(file.path);
-        console.error("Critical Database Error in submitVivaAnswer:", err);
         res.status(500).json({ error: "Failed to process answer" });
     }
 };
@@ -292,11 +275,21 @@ const finalizeViva = async (req, res) => {
 
         const overallFeedback = { summary: "AI Evaluation complete." };
 
+        // 🔴 FIX: Parse scores and determine if face is verified (e.g., score >= 70)
+        const finalIntegrityScore = integrity_score || 100;
+        const finalFaceMatchScore = face_match_score || 100;
+        const isFaceVerified = finalFaceMatchScore >= 70; // You can adjust this threshold
+
+        // 🔴 FIX: Added is_face_verified = $4 to the UPDATE query
         await pool.query(
             `UPDATE viva_sessions 
-             SET ended_at = CURRENT_TIMESTAMP, video_url = $1, integrity_score = $2, face_match_score = $3 
-             WHERE session_id = $4`, 
-            [video_url, integrity_score || 100, face_match_score || 100, session_id]
+             SET ended_at = CURRENT_TIMESTAMP, 
+                 video_url = $1, 
+                 integrity_score = $2, 
+                 face_match_score = $3, 
+                 is_face_verified = $4 
+             WHERE session_id = $5`, 
+            [video_url, finalIntegrityScore, finalFaceMatchScore, isFaceVerified, session_id]
         );
 
         await pool.query(
@@ -308,7 +301,7 @@ const finalizeViva = async (req, res) => {
 
         res.json({ success: true, final_score: averageScore });
     } catch (err) {
-        console.error("Finalize Error:", err);
+        console.error("Finalize Viva Error:", err);
         res.status(500).json({ error: "Failed to finalize Viva" });
     }
 };

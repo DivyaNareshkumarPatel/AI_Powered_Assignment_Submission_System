@@ -1,96 +1,52 @@
-// const multer = require('multer');
-// const { CloudinaryStorage } = require('multer-storage-cloudinary');
-// const cloudinary = require('../config/cloudinary');
-
-// const storage = new CloudinaryStorage({
-//     cloudinary: cloudinary,
-//     params: async (req, file) => {
-//         // 1. Determine the resource type
-//         let resourceType = 'auto'; // Default to auto
-//         let folder = 'veriviva_assignments';
-//         let format = undefined;
-
-//         if (file.mimetype === 'application/pdf') {
-//             // Force PDF format to prevent image conversion issues
-//             format = 'pdf';
-//         } else if (
-//             file.mimetype === 'application/msword' || 
-//             file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-//         ) {
-//             // Word docs must be 'raw' to be stored correctly
-//             resourceType = 'raw'; 
-//         }
-
-//         return {
-//             folder: folder,
-//             resource_type: resourceType,
-//             format: format, // Explicitly set format for PDFs
-//             public_id: file.originalname.split('.')[0] + '-' + Date.now() // Keep original name + timestamp
-//         };
-//     },
-// });
-
-// // File Filter to reject unwanted files
-// const fileFilter = (req, file, cb) => {
-//     const allowedMimeTypes = [
-//         'application/pdf',
-//         'application/msword',
-//         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-//         'image/jpeg',
-//         'image/png',
-//         'image/jpg'
-//     ];
-
-//     if (allowedMimeTypes.includes(file.mimetype)) {
-//         cb(null, true);
-//     } else {
-//         cb(new Error('Invalid file type. Only PDF, Doc, Docx, and Images are allowed.'), false);
-//     }
-// };
-
-// const upload = multer({
-//     storage: storage,
-//     limits: { fileSize: 10 * 1024 * 1024 },
-//     fileFilter: fileFilter
-// });
-
-// module.exports = upload;
-
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
+
+// Ensure the uploads directory exists to prevent crashes
+const uploadDir = 'uploads/';
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
 
 // Configure Local Storage
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/'); // Save files to 'uploads' folder
+    cb(null, uploadDir); 
   },
   filename: function (req, file, cb) {
-    // Save as: fieldname-timestamp.extension
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    
+    // Fallback: If the browser blob doesn't have an extension, force .webm for videos
+    let ext = path.extname(file.originalname);
+    if (!ext && file.mimetype.startsWith('video/')) {
+        ext = '.webm';
+    }
+
+    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
   }
 });
 
 // File Filter (Accepts PDFs, Docs, Images, AND VIDEOS)
 const fileFilter = (req, file, cb) => {
-  // 🔴 1. Added 'webm' and 'mp4' to the allowed extensions
-  const allowedTypes = /pdf|doc|docx|jpg|jpeg|png|webm|mp4/;
+  // 🔴 FIX: Immediately accept any video type without checking extension strings
+  if (file.mimetype.startsWith('video/')) {
+      return cb(null, true);
+  }
+
+  const allowedTypes = /pdf|doc|docx|jpg|jpeg|png/;
   const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  
-  // 🔴 2. explicitly allow files where the mimetype starts with 'video/'
-  const mimetype = allowedTypes.test(file.mimetype) || file.mimetype.startsWith('video/');
+  const mimetype = allowedTypes.test(file.mimetype);
 
   if (extname && mimetype) {
     return cb(null, true);
   } else {
-    cb(new Error('Only PDFs, Docs, Images, and Videos (WebM/MP4) are allowed!'));
+    cb(new Error('Only PDFs, Docs, Images, and Videos are allowed!'));
   }
 };
 
 const upload = multer({ 
   storage: storage,
-  // 🔴 3. Increased limit to 50MB because video files are much larger than PDFs!
-  limits: { fileSize: 50 * 1024 * 1024 } 
+  limits: { fileSize: 100 * 1024 * 1024 } // Increased to 100MB for safe video uploads
 });
 
 module.exports = upload;

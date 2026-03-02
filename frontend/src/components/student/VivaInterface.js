@@ -1,25 +1,25 @@
+'use client'; // <-- THIS MUST BE THE VERY FIRST LINE
+
 import React, { useState, useEffect, useRef } from 'react';
 import Webcam from 'react-webcam';
 import { verifyActiveFace, startVivaSession, submitVivaAnswer, finalizeVivaSession } from '@/utils/api';
 import { ShieldAlert, CheckCircle, Bot, Loader2, Send, CheckCircle2, UserCheck, Mic, MicOff, Volume2 } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 export default function VivaInterface({ submissionId, onComplete }) {
+    const { user } = useAuth();
     const webcamRef = useRef(null);
     const recognitionRef = useRef(null);
     const mediaRecorderRef = useRef(null);
-    const chunksRef = useRef([]); // Stores video recording data
-    const pingStats = useRef({ total: 0, success: 0 }); // Tracks security percentages
+    const chunksRef = useRef([]);
+    const pingStats = useRef({ total: 0, success: 0 });
     
-    // Test Phases: 'SETUP' -> 'INITIAL_VERIFY' -> 'TEST' -> 'COMPLETED'
     const [phase, setPhase] = useState('SETUP');
     const [faceStatus, setFaceStatus] = useState('NO_FACE');
     const [isVerifying, setIsVerifying] = useState(false);
-    
-    // Violation Countdown State
     const [violationActive, setViolationActive] = useState(false);
     const [countdown, setCountdown] = useState(10);
 
-    // Q&A State
     const [sessionId, setSessionId] = useState(null);
     const [questions, setQuestions] = useState([]);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -37,9 +37,7 @@ export default function VivaInterface({ submissionId, onComplete }) {
         }
     };
 
-    // ==========================================
-    // 1. SETUP PHASE (Fetch Questions)
-    // ==========================================
+    // 1. INITIALIZATION
     useEffect(() => {
         const initViva = async () => {
             try {
@@ -48,44 +46,20 @@ export default function VivaInterface({ submissionId, onComplete }) {
                 setQuestions(data.questions || []);
                 setPhase('INITIAL_VERIFY'); 
             } catch (err) {
-                console.error("Failed to start Viva Session", err);
+                console.error(err);
                 alert("Error initializing Viva.");
                 onComplete();
             }
         };
         if (submissionId && phase === 'SETUP') initViva();
-        
-        // Cleanup speech synthesis on unmount
         return () => window.speechSynthesis && window.speechSynthesis.cancel();
     }, [submissionId, phase, onComplete]);
 
-    // ==========================================
-    // 2. START VIDEO RECORDING
-    // ==========================================
-    useEffect(() => {
-        if (phase === 'TEST' && webcamRef.current && webcamRef.current.stream) {
-            // Start recording as soon as the TEST phase begins
-            mediaRecorderRef.current = new MediaRecorder(webcamRef.current.stream, { mimeType: "video/webm" });
-            
-            mediaRecorderRef.current.addEventListener("dataavailable", ({ data }) => {
-                if (data.size > 0) {
-                    chunksRef.current.push(data);
-                }
-            });
-            
-            mediaRecorderRef.current.start();
-        }
-    }, [phase]);
-
-    // ==========================================
-    // 3. CONTINUOUS FACE VERIFICATION
-    // ==========================================
+    // 2. CONTINUOUS VERIFICATION
     useEffect(() => {
         if (phase !== 'INITIAL_VERIFY' && phase !== 'TEST') return;
 
-        // Dynamic ping speed for better security tracking
-        let intervalTime = 5000;
-        if (phase === 'INITIAL_VERIFY') intervalTime = 2000;
+        let intervalTime = phase === 'INITIAL_VERIFY' ? 2000 : 5000;
         if (phase === 'TEST' && faceStatus !== 'OK') intervalTime = 1500;
 
         const interval = setInterval(async () => {
@@ -101,7 +75,6 @@ export default function VivaInterface({ submissionId, onComplete }) {
                 const result = await verifyActiveFace(blob);
                 setFaceStatus(result.face_status);
 
-                // Track percentages for final score
                 if (phase === 'TEST') {
                     pingStats.current.total += 1;
                     if (result.face_status === 'OK') pingStats.current.success += 1;
@@ -111,7 +84,7 @@ export default function VivaInterface({ submissionId, onComplete }) {
                     setPhase('TEST');
                 }
             } catch (err) {
-                console.error("Verification ping failed", err);
+                console.error(err);
             } finally {
                 setIsVerifying(false);
             }
@@ -120,13 +93,31 @@ export default function VivaInterface({ submissionId, onComplete }) {
         return () => clearInterval(interval);
     }, [phase, faceStatus]); 
 
-    // ==========================================
-    // 4. SPEECH-TO-TEXT & TEXT-TO-SPEECH
-    // ==========================================
+    // 3. SAFE RECORDING LOGIC
+    const startRecording = () => {
+        // Prevent starting multiple times
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') return; 
+        if (!webcamRef.current || !webcamRef.current.stream) return;
+
+        // Initialize recorder safely
+        mediaRecorderRef.current = new MediaRecorder(webcamRef.current.stream, { mimeType: "video/webm" });
+        
+        mediaRecorderRef.current.addEventListener("dataavailable", ({ data }) => {
+            if (data.size > 0) {
+                chunksRef.current.push(data);
+            }
+        });
+        
+        // Push video data every 1 second
+        mediaRecorderRef.current.start(1000);
+        console.log("🎥 Video Recording Started Successfully!");
+    };
+
+    // 4. SPEECH LOGIC
     const toggleListening = () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            alert("Your browser doesn't support speech recognition. Please use Google Chrome.");
+            alert("Browser not supported.");
             return;
         }
 
@@ -151,7 +142,7 @@ export default function VivaInterface({ submissionId, onComplete }) {
                 }
             };
 
-            recognition.onerror = (event) => setIsListening(false);
+            recognition.onerror = () => setIsListening(false);
             recognition.onend = () => setIsListening(false);
 
             recognitionRef.current = recognition;
@@ -174,9 +165,7 @@ export default function VivaInterface({ submissionId, onComplete }) {
         }
     }, [phase, currentIndex, questions]);
 
-    // ==========================================
     // 5. SECURITY COUNTDOWN
-    // ==========================================
     useEffect(() => {
         let timer;
         if (phase === 'TEST') {
@@ -205,14 +194,27 @@ export default function VivaInterface({ submissionId, onComplete }) {
         return () => { if (timer) clearInterval(timer); };
     }, [faceStatus, phase, isListening]);
 
-    // ==========================================
-    // 6. FINALIZATION LOGIC (WITH VIDEO UPLOAD)
-    // ==========================================
+    // 6. FINALIZATION
+    const stopRecordingAndFinalize = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+            mediaRecorderRef.current.onstop = () => {
+                // Wait 500ms to ensure the browser pushes the final video chunk to the array
+                setTimeout(() => {
+                    executeFinalization();
+                }, 500);
+            };
+            // Force the recorder to dump its remaining data immediately
+            mediaRecorderRef.current.requestData(); 
+            mediaRecorderRef.current.stop();
+        } else {
+            executeFinalization();
+        }
+    };
+
     const executeFinalization = async () => {
         const total = pingStats.current.total;
         const success = pingStats.current.success;
         
-        // Calculate Percentages
         const integrityScore = total > 0 ? Math.round((success / total) * 100) : 100;
         const faceMatchScore = Math.min(100, integrityScore + Math.floor(Math.random() * 4)); 
 
@@ -222,39 +224,32 @@ export default function VivaInterface({ submissionId, onComplete }) {
         formData.append("integrity_score", integrityScore);
         formData.append("face_match_score", faceMatchScore);
 
-        // Append the video blob if chunks exist
+        console.log("Collected Video Chunks:", chunksRef.current.length);
+
         if (chunksRef.current.length > 0) {
             const videoBlob = new Blob(chunksRef.current, { type: "video/webm" });
+            console.log("Generated Video Blob Size:", (videoBlob.size / 1024 / 1024).toFixed(2), "MB");
             formData.append("video", videoBlob, "viva_recording.webm");
+        } else {
+            console.error("WARNING: No video data captured! The video file will be empty.");
         }
 
         try {
             await finalizeVivaSession(formData);
         } catch (err) {
-            console.error("Failed to upload final session data:", err);
+            console.error(err);
         } finally {
             setTimeout(() => { onComplete(); }, 3000);
         }
     };
 
     const handleForceFail = async () => {
-        alert("Test Terminated: Security rules violated.");
+        alert("Test Terminated Due to Security Violation");
         setPhase('COMPLETED');
-        
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-            // Wait for recording to fully process the last chunk before finalizing
-            mediaRecorderRef.current.onstop = () => {
-                executeFinalization();
-            };
-            mediaRecorderRef.current.stop();
-        } else {
-            await executeFinalization();
-        }
+        stopRecordingAndFinalize();
     };
 
-    // ==========================================
-    // 7. SUBMIT ANSWER LOGIC
-    // ==========================================
+    // 7. SUBMIT ANSWER
     const handleAnswerSubmit = async () => {
         if (!answerText.trim() || !webcamRef.current) return;
         setIsSubmittingAnswer(true);
@@ -280,19 +275,10 @@ export default function VivaInterface({ submissionId, onComplete }) {
                 setAnswerText('');
             } else {
                 setPhase('COMPLETED');
-                
-                // Stop Recording Video & Wait for chunks to assemble before finalization!
-                if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-                    mediaRecorderRef.current.onstop = () => {
-                        executeFinalization();
-                    };
-                    mediaRecorderRef.current.stop(); 
-                } else {
-                    await executeFinalization();
-                }
+                stopRecordingAndFinalize(); 
             }
         } catch (err) { 
-            alert("Failed to submit. Try again."); 
+            alert("Failed to submit."); 
         } finally { 
             setIsSubmittingAnswer(false); 
         }
@@ -309,7 +295,7 @@ export default function VivaInterface({ submissionId, onComplete }) {
             <div className="h-[80vh] flex flex-col items-center justify-center text-emerald-600 animate-in zoom-in duration-500">
                 <CheckCircle2 className="w-24 h-24 mb-4" />
                 <h2 className="text-3xl font-black text-slate-900 tracking-tight">Viva Complete!</h2>
-                <p className="font-medium text-slate-500 mt-2">Saving Video & Security Data...</p>
+                <p className="font-medium text-slate-500 mt-2">Saving Video Data...</p>
                 <Loader2 className="animate-spin mt-4 text-slate-400" size={24} />
             </div>
         );
@@ -319,10 +305,9 @@ export default function VivaInterface({ submissionId, onComplete }) {
         return (
             <div className="h-[80vh] flex flex-col items-center justify-center text-slate-900 bg-slate-50 relative overflow-hidden">
                 <h2 className="text-3xl font-black mb-4 flex items-center gap-3"><UserCheck className="text-blue-600"/> Initial Security Scan</h2>
-                <p className="text-slate-500 font-medium mb-8">Please look directly at the camera to verify your identity before the test begins.</p>
+                <p className="text-slate-500 font-medium mb-8">Please look directly at the camera.</p>
                 
                 <div className="relative w-80 h-80 rounded-full overflow-hidden border-8 border-white shadow-[0_0_50px_rgba(0,0,0,0.1)]">
-                    {/* Muted is true so it doesn't echo your voice during setup! */}
                     <Webcam ref={webcamRef} audio={true} muted={true} screenshotFormat="image/jpeg" className="w-full h-full object-cover" />
                     <div className={`absolute inset-0 border-[12px] rounded-full pointer-events-none transition-colors duration-500 ${faceStatus === 'OK' ? 'border-emerald-500' : 'border-amber-400'}`}></div>
                 </div>
@@ -339,8 +324,6 @@ export default function VivaInterface({ submissionId, onComplete }) {
 
     return (
         <div className="h-full flex flex-col lg:flex-row gap-6 p-6 bg-slate-50 min-h-[85vh] relative">
-            
-            {/* FULLSCREEN RED LOCKDOWN OVERLAY */}
             {violationActive && (
                 <div className="fixed inset-0 z-[999] bg-red-950/95 backdrop-blur-xl flex flex-col items-center justify-center animate-in fade-in duration-300">
                     <ShieldAlert className="text-red-500 w-24 h-24 mb-4 animate-pulse" />
@@ -429,8 +412,15 @@ export default function VivaInterface({ submissionId, onComplete }) {
             <div className="w-full lg:w-80 flex flex-col gap-4">
                 <div className="relative w-full bg-black rounded-3xl overflow-hidden shadow-lg border-4 border-slate-800 aspect-video lg:aspect-auto">
                     
-                    {/* MUTED=TRUE added here so your voice doesn't echo while you speak! */}
-                    <Webcam ref={webcamRef} audio={true} muted={true} screenshotFormat="image/jpeg" className="w-full h-full object-cover" />
+                    {/* 🔴 THIS IS THE FIX: onUserMedia guarantees recording starts safely */}
+                    <Webcam 
+                        ref={webcamRef} 
+                        audio={true} 
+                        muted={true} 
+                        screenshotFormat="image/jpeg" 
+                        className="w-full h-full object-cover" 
+                        onUserMedia={startRecording}
+                    />
                     
                     <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-2 border border-white/10 z-30">
                         {isVerifying ? <Loader2 size={12} className="text-blue-400 animate-spin" /> : <CheckCircle size={12} className="text-emerald-400" />}
