@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { fetchStudentHistory, fetchStudentSubmissionDetails } from '@/utils/api';
 import { CheckCircle, Search, Archive, ChevronRight, X, Video, ShieldAlert, Bot, MessageSquare } from 'lucide-react';
@@ -108,7 +110,8 @@ const SubmissionHistory = () => {
                                 </td>
                                 <td className="p-4 text-center"><StatusBadge status={s.status} /></td>
                                 <td className="p-4 text-center">
-                                    <span className={`text-lg font-bold ${s.final_score ? 'text-emerald-600' : 'text-slate-300'}`}>{s.final_score || '-'}</span>
+                                    {/* Updated to display % */}
+                                    <span className={`text-lg font-bold ${s.final_score ? 'text-emerald-600' : 'text-slate-300'}`}>{s.final_score ? `${s.final_score}%` : '-'}</span>
                                 </td>
                                 <td className="p-4 text-right pr-6">
                                     <button onClick={() => openDetails(s)} className="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-colors shadow-sm">
@@ -145,7 +148,8 @@ const SubmissionHistory = () => {
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="bg-emerald-50 border border-emerald-100 p-5 rounded-xl flex flex-col justify-center items-center shadow-sm">
                                     <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-2">Final Score</span>
-                                    <span className="text-5xl font-black text-emerald-700">{selectedSubmission.final_score || '-'}</span>
+                                    {/* Added % sign here */}
+                                    <span className="text-5xl font-black text-emerald-700">{selectedSubmission.final_score ? `${selectedSubmission.final_score}%` : '-'}</span>
                                 </div>
                                 <div className="md:col-span-2 bg-white border border-slate-200 p-5 rounded-xl shadow-sm">
                                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Teacher Remarks</span>
@@ -190,15 +194,33 @@ const SubmissionHistory = () => {
                                     <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
                                         <div className="bg-slate-50 px-5 py-3 border-b border-slate-100 flex items-center gap-2">
                                             <MessageSquare size={16} className="text-slate-500" />
-                                            <h4 className="font-bold text-slate-700 text-sm">Question Log</h4>
+                                            <h4 className="font-bold text-slate-700 text-sm">Question Log & Scores</h4>
                                         </div>
                                         <div className="p-5 space-y-6 max-h-60 overflow-y-auto">
-                                            {details.vivaLogs && details.vivaLogs.length > 0 ? details.vivaLogs.map((log, i) => (
-                                                <div key={i} className="border-b border-slate-100 pb-5 last:border-0 last:pb-0">
-                                                    <p className="font-bold text-slate-900 text-sm mb-2"><span className="text-blue-500 mr-2">Q{i+1}.</span>{log.question_text}</p>
-                                                    <p className="text-sm font-medium text-slate-600 pl-6 border-l-2 border-slate-200 italic py-1 bg-slate-50 rounded-r-lg">"{log.student_answer_transcript || "No answer detected"}"</p>
-                                                </div>
-                                            )) : <p className="text-slate-400 font-medium text-sm text-center">No logs found.</p>}
+                                            {details.vivaLogs && details.vivaLogs.length > 0 ? details.vivaLogs.map((log, i) => {
+                                                let aiEval = log.ai_evaluation;
+                                                if (typeof aiEval === 'string') {
+                                                    try { aiEval = JSON.parse(aiEval); } catch(e) {}
+                                                }
+                                                
+                                                // Calculate individual question percentage safely
+                                                const score = aiEval?.score || 0;
+                                                const maxMarks = aiEval?.max_marks || 10;
+                                                const questionPercentage = Math.round((score / maxMarks) * 100);
+
+                                                return (
+                                                    <div key={i} className="border-b border-slate-100 pb-5 last:border-0 last:pb-0">
+                                                        {/* Header with Question and individual Percentage */}
+                                                        <div className="flex justify-between items-start gap-4 mb-2">
+                                                            <p className="font-bold text-slate-900 text-sm"><span className="text-blue-500 mr-2">Q{i+1}.</span>{log.question_text}</p>
+                                                            <div className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg font-bold text-xs whitespace-nowrap shadow-sm">
+                                                                {questionPercentage}%
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-sm font-medium text-slate-600 pl-6 border-l-2 border-slate-200 italic py-1 bg-slate-50 rounded-r-lg">"{log.student_answer_transcript || "No answer detected"}"</p>
+                                                    </div>
+                                                );
+                                            }) : <p className="text-slate-400 font-medium text-sm text-center">No logs found.</p>}
                                         </div>
                                     </div>
                                 </div>

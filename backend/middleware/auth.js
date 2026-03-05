@@ -1,7 +1,8 @@
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
-const auth = (req, res, next) => {
+// Renamed from 'auth' to 'verifyToken' to match your routes
+const verifyToken = (req, res, next) => {
     const token = req.header('Authorization');
 
     if (!token) {
@@ -16,7 +17,8 @@ const auth = (req, res, next) => {
             process.env.JWT_SECRET || 'secret123'
         );
 
-        req.user = decoded.user;
+        // Attach the user payload to the request object
+        req.user = decoded.user; 
         
         next();
 
@@ -25,4 +27,16 @@ const auth = (req, res, next) => {
     }
 };
 
-module.exports = auth;
+// Added missing checkRole function
+const checkRole = (roles) => {
+    return (req, res, next) => {
+        // Ensure req.user exists and their role matches the required roles
+        if (!req.user || !req.user.role || !roles.includes(req.user.role)) {
+            return res.status(403).json({ error: 'Access denied: insufficient permissions' });
+        }
+        next();
+    };
+};
+
+// Export both functions as an object so destructuring works in your routes
+module.exports = { verifyToken, checkRole };

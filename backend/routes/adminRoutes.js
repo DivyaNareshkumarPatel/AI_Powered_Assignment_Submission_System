@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
 const adminController = require('../controllers/adminController');
+const { verifyToken, checkRole } = require('../middleware/auth');
 
 
 // ==========================================
@@ -74,4 +75,6 @@ router.get('/allocations', adminController.getAllocations);
 router.put('/allocations/:id', adminController.updateAllocation);
 router.delete('/allocations/:id', adminController.deleteAllocation);
 
+
+router.post('/generate-history', verifyToken, checkRole(['ADMIN']), adminController.generateStudentHistory);
 module.exports = router;

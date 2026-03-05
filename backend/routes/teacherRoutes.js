@@ -1,10 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const upload = require('../middleware/upload'); // The Cloudinary middleware
-const auth = require('../middleware/auth');
+
+// 🔴 CORRECTED IMPORT: Destructuring the functions from auth.js
+const { verifyToken, checkRole } = require('../middleware/auth');
+
 const { 
     getTeacherAllocations, 
-    createAssignment, // <--- We will fix this next
+    createAssignment,
     getTeacherAssignments,
     getSubmissionStats,
     getSubmissionsForAssignment,
@@ -13,21 +16,23 @@ const {
     getStudentsByClass
 } = require('../controllers/teacherController');
 
-// Get Classes
-router.get('/allocations', auth, getTeacherAllocations);
+// 🔴 APPLIED MIDDLEWARE: Added verifyToken and checkRole(['TEACHER']) to all routes
 
-// CREATE ASSIGNMENT (Fixing this route)
+// Get Classes
+router.get('/allocations', verifyToken, checkRole(['TEACHER']), getTeacherAllocations);
+
+// CREATE ASSIGNMENT
 // We use 'upload.fields' because we might upload 2 different files
-router.post('/assignments', auth, upload.fields([
+router.post('/assignments', verifyToken, checkRole(['TEACHER']), upload.fields([
     { name: 'question_file', maxCount: 1 },
     { name: 'solution_file', maxCount: 1 }
 ]), createAssignment);
 
-router.get('/assignments', auth, getTeacherAssignments);
-router.get('/stats', auth, getSubmissionStats);
-router.get('/assignments/:assignment_id/submissions', auth, getSubmissionsForAssignment);
-router.put('/submissions/:submission_id/grade', auth, updateSubmissionGrade);
-router.get('/submissions/:submission_id/details', auth, getSubmissionDetails);
-router.get('/classes/:class_id/students', getStudentsByClass);
+router.get('/assignments', verifyToken, checkRole(['TEACHER']), getTeacherAssignments);
+router.get('/stats', verifyToken, checkRole(['TEACHER']), getSubmissionStats);
+router.get('/assignments/:assignment_id/submissions', verifyToken, checkRole(['TEACHER']), getSubmissionsForAssignment);
+router.put('/submissions/:submission_id/grade', verifyToken, checkRole(['TEACHER']), updateSubmissionGrade);
+router.get('/submissions/:submission_id/details', verifyToken, checkRole(['TEACHER']), getSubmissionDetails);
+router.get('/classes/:class_id/students', verifyToken, checkRole(['TEACHER']), getStudentsByClass);
 
 module.exports = router;

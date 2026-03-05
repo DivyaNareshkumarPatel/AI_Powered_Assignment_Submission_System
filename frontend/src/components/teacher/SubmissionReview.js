@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { fetchTeacherAssignments, fetchSubmissions, updateSubmissionGrade, fetchSubmissionDetails } from '@/utils/api';
 import { ChevronRight, Loader2, Eye, X, Save, Bot, ShieldAlert, Video, MessageSquare, CheckCircle, FolderOpen, Lock, Archive } from 'lucide-react';
@@ -169,7 +171,8 @@ export default function SubmissionReview() {
                                 </td>
                                 <td className="p-4 text-center"><StatusBadge status={s.status} /></td>
                                 <td className="p-4 text-center">
-                                    <span className={`text-lg font-bold ${s.final_score ? 'text-slate-900' : 'text-slate-300'}`}>{s.final_score || '-'}</span>
+                                    {/* Appended % to the Final Score */}
+                                    <span className={`text-lg font-bold ${s.final_score ? 'text-slate-900' : 'text-slate-300'}`}>{s.final_score ? `${s.final_score}%` : '-'}</span>
                                 </td>
                                 <td className="p-4 text-right pr-6">
                                     <button onClick={() => openReviewModal(s)} className="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-colors shadow-sm">
@@ -223,7 +226,7 @@ export default function SubmissionReview() {
                                         <div className="flex items-end gap-2">
                                             <input type="number" value={editScore} onChange={(e) => setEditScore(e.target.value)} disabled={isReadOnly}
                                                 className={`w-24 text-4xl font-bold text-slate-900 bg-transparent border-b-2 border-slate-200 outline-none pb-1 transition-colors ${isReadOnly ? 'cursor-not-allowed opacity-70' : 'focus:border-blue-600'}`} />
-                                            <span className="text-xl font-bold text-slate-400 pb-2">/ 100</span>
+                                            <span className="text-xl font-bold text-slate-400 pb-2">%</span>
                                         </div>
                                     </div>
                                     <button onClick={() => setViewPdf({ url: selectedSubmission.file_url, title: `Submission: ${selectedSubmission.student_name}` })} 
@@ -260,15 +263,26 @@ export default function SubmissionReview() {
                                         <div className="p-5 space-y-6 max-h-96 overflow-y-auto">
                                             {vivaDetails.vivaLogs && vivaDetails.vivaLogs.length > 0 ? vivaDetails.vivaLogs.map((log, i) => {
                                                 let aiEval = log.ai_evaluation;
-                                                // Handle potential stringified JSON
                                                 if (typeof aiEval === 'string') {
                                                     try { aiEval = JSON.parse(aiEval); } catch(e) {}
                                                 }
 
+                                                // Calculate individual question percentage safely
+                                                const score = aiEval?.score || 0;
+                                                const maxMarks = aiEval?.max_marks || 10;
+                                                const questionPercentage = Math.round((score / maxMarks) * 100);
+
                                                 return (
-                                                <div key={i} className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                                                <div key={i} className="bg-slate-50 p-5 rounded-2xl border border-slate-200 relative">
+                                                    
+                                                    {/* Score Badge */}
+                                                    <div className="absolute top-5 right-5 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm flex flex-col items-center min-w-[60px]">
+                                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Score</span>
+                                                        <span className="text-sm font-black text-blue-600">{questionPercentage}%</span>
+                                                    </div>
+
                                                     {/* The Question */}
-                                                    <h5 className="font-bold text-slate-900 mb-3 text-sm leading-relaxed">
+                                                    <h5 className="font-bold text-slate-900 mb-3 text-sm leading-relaxed pr-16">
                                                         <span className="text-blue-600 mr-2">Q{i+1}.</span>{log.question_text}
                                                     </h5>
                                                     

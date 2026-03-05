@@ -982,6 +982,52 @@ const deleteAllocation = async (req, res) => {
     }
 };
 
+const generateStudentHistory = async (req, res) => {
+    const { semester_id } = req.body;
+
+    if (!semester_id) {
+        return res.status(400).json({ error: "Semester ID is required." });
+    }
+
+    try {
+        // This query calculates the average score and total completed assignments
+        // for every student in the specified semester and inserts it into the history table.
+        const result = await pool.query(
+            `INSERT INTO student_academic_history (student_id, class_id, semester_id, academic_year_id, total_assignments_completed, average_assignment_score)
+             SELECT 
+                 u.user_id as student_id,
+                 u.class_id,
+                 c.semester_id,
+                 sem.academic_year_id,
+                 COUNT(s.submission_id) as total_assignments_completed,
+                 COALESCE(ROUND(AVG(s.final_score), 2), 0) as average_assignment_score
+             FROM users u
+             JOIN classes c ON u.class_id = c.class_id
+             JOIN semesters sem ON c.semester_id = sem.semester_id
+             LEFT JOIN submissions s ON s.student_id = u.user_id AND s.status IN ('AI_GRADED', 'TEACHER_VERIFIED')
+             WHERE c.semester_id = $1 AND u.role = 'STUDENT'
+             GROUP BY u.user_id, u.class_id, c.semester_id, sem.academic_year_id
+             
+             ON CONFLICT (student_id, semester_id) 
+             DO UPDATE SET 
+                 total_assignments_completed = EXCLUDED.total_assignments_completed,
+                 average_assignment_score = EXCLUDED.average_assignment_score,
+                 status = 'COMPLETED'
+             RETURNING *;`,
+            [semester_id]
+        );
+
+        res.json({ 
+            message: "Student academic history generated successfully!", 
+            records_updated: result.rowCount 
+        });
+
+    } catch (err) {
+        console.error("Error generating history:", err);
+        res.status(500).json({ error: "Server Error generating academic history." });
+    }
+};
+
 module.exports = {
     createInstitute, getInstitutes,
     updateInstitute, deleteInstitute,
@@ -1001,5 +1047,5 @@ module.exports = {
     updateSemesterStatus, getStudents,
     updateStudent, deleteStudent,
     getAllocations, updateAllocation,
-    deleteAllocation
+    deleteAllocation, generateStudentHistory
 };

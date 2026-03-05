@@ -1,33 +1,37 @@
 const express = require('express');
 const router = express.Router();
 const upload = require('../middleware/upload');
-const auth = require('../middleware/auth');
+
+// 🔴 FIX: Destructure verifyToken and checkRole instead of importing 'auth'
+const { verifyToken, checkRole } = require('../middleware/auth');
+
 const { 
     getPendingAssignments, 
     getStudentHistory, 
     submitAssignment,
     continuousFaceCheck,
     getStudentSubmissionDetails,
-    startVivaSession,      // 🔴 NEW
-    submitVivaAnswer,      // 🔴 NEW
-    finalizeViva           // 🔴 NEW
+    startVivaSession,
+    submitVivaAnswer,
+    finalizeViva
 } = require('../controllers/studentController');
 
-router.get('/pending', auth, getPendingAssignments);
-router.get('/history', auth, getStudentHistory);
-router.get('/submissions/:submission_id/details', auth, getStudentSubmissionDetails);
+// 🔴 FIX: Replaced 'auth' with verifyToken and checkRole(['STUDENT'])
+router.get('/pending', verifyToken, checkRole(['STUDENT']), getPendingAssignments);
+router.get('/history', verifyToken, checkRole(['STUDENT']), getStudentHistory);
+router.get('/submissions/:submission_id/details', verifyToken, checkRole(['STUDENT']), getStudentSubmissionDetails);
 
 // Upload PDF Assignment
-router.post('/submit', auth, upload.single('submission_file'), submitAssignment);
+router.post('/submit', verifyToken, checkRole(['STUDENT']), upload.single('submission_file'), submitAssignment);
 
 // Background Verification 
-router.post('/verify-face', auth, upload.single('frame'), continuousFaceCheck);
+router.post('/verify-face', verifyToken, checkRole(['STUDENT']), upload.single('frame'), continuousFaceCheck);
 
 // ==============================
-// 🔴 NEW: AI VIVA TEST ROUTES
+// AI VIVA TEST ROUTES
 // ==============================
-router.post('/viva/start', auth, startVivaSession);
-router.post('/viva/answer', auth, upload.single('frame'), submitVivaAnswer); // Includes image frame for grading verification
-router.post('/viva/finalize', auth, upload.single('video'), finalizeViva);
+router.post('/viva/start', verifyToken, checkRole(['STUDENT']), startVivaSession);
+router.post('/viva/answer', verifyToken, checkRole(['STUDENT']), upload.single('frame'), submitVivaAnswer); 
+router.post('/viva/finalize', verifyToken, checkRole(['STUDENT']), upload.single('video'), finalizeViva);
 
 module.exports = router;
