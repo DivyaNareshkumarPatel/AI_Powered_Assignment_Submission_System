@@ -89,7 +89,7 @@ const getTeacherAssignments = async (req, res) => {
              JOIN semesters sem ON c.semester_id = sem.semester_id
              JOIN academic_years ay ON sem.academic_year_id = ay.academic_year_id
              WHERE a.teacher_id = $1
-               AND ay.start_date <= CURRENT_DATE -- Strictly exclude future academic years
+               AND ay.start_date <= CURRENT_DATE
              ORDER BY a.created_at DESC`,
             [teacher_id]
         );
@@ -189,8 +189,172 @@ const getStudentsByClass = async (req, res) => {
     }
 };
 
+const toggleSubmissionStatus = async (req, res) => {
+    try {
+        const { assignment_id } = req.params;
+        const { is_accepting } = req.body;
+        const teacher_id = req.user.id;
+
+        const result = await pool.query(
+            `UPDATE assignments 
+             SET is_accepting_submissions = $1 
+             WHERE assignment_id = $2 AND teacher_id = $3 
+             RETURNING *`,
+            [is_accepting, assignment_id, teacher_id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Assignment not found or unauthorized" });
+        }
+
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error("Toggle Status Error:", err);
+        res.status(500).send("Server Error");
+    }
+};
+
+// ==========================================
+// UPDATE ASSIGNMENT
+// ==========================================
+const updateAssignment = async (req, res) => {
+    try {
+        const { assignment_id } = req.params;
+        const { title, description, deadline } = req.body;
+        const teacher_id = req.user.id;
+
+        const result = await pool.query(
+            `UPDATE assignments 
+             SET title = COALESCE($1, title), 
+                 description = COALESCE($2, description), 
+                 deadline = COALESCE($3, deadline)
+             WHERE assignment_id = $4 AND teacher_id = $5 
+             RETURNING *`,
+            [title, description, deadline, assignment_id, teacher_id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Assignment not found or unauthorized" });
+        }
+
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error("Update Assignment Error:", err);
+        res.status(500).json({ error: "Server Error" });
+    }
+};
+
+// ==========================================
+// DELETE ASSIGNMENT
+// ==========================================
+const deleteAssignment = async (req, res) => {
+    try {
+        const { assignment_id } = req.params;
+        const teacher_id = req.user.id;
+
+        const result = await pool.query(
+            'DELETE FROM assignments WHERE assignment_id = $1 AND teacher_id = $2 RETURNING *',
+            [assignment_id, teacher_id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Assignment not found or unauthorized" });
+        }
+
+        res.json({ message: "Assignment deleted successfully" });
+    } catch (err) {
+        console.error("Delete Assignment Error:", err);
+        res.status(500).json({ error: "Server Error. Ensure no existing submissions block this deletion." });
+    }
+};
+
+const resetSubmission = async (req, res) => {
+    try {
+        const { submission_id } = req.params;
+        const teacher_id = req.user.id;
+
+        // Verify the teacher owns the assignment this submission belongs to
+        const check = await pool.query(
+            `SELECT s.submission_id FROM submissions s
+             JOIN assignments a ON s.assignment_id = a.assignment_id
+             WHERE s.submission_id = $1 AND a.teacher_id = $2`,
+            [submission_id, teacher_id]
+        );
+
+        if (check.rows.length === 0) {
+            return res.status(403).json({ error: "Not authorized to reset this submission." });
+        }
+
+        // Deleting the submission automatically cascades and deletes the Viva sessions and logs
+        await pool.query('DELETE FROM submissions WHERE submission_id = $1', [submission_id]);
+
+        res.json({ message: "Submission reset successfully. The student can now re-upload." });
+    } catch (err) {
+        console.error("Reset Submission Error:", err);
+        res.status(500).json({ error: "Server Error while resetting submission." });
+    }
+};
+
+// ==========================================
+// GET STUDENT REQUESTS (NOTIFICATIONS)
+// ==========================================
+const getTeacherRequests = async (req, res) => {
+    try {
+        const teacher_id = req.user.id;
+        const result = await pool.query(
+            `SELECT s.*, a.title as assignment_title, u.name as student_name, u.enrollment_number,
+                    c.name as class_name, sub.name as subject_name
+             FROM submissions s
+             JOIN assignments a ON s.assignment_id = a.assignment_id
+             JOIN users u ON s.student_id = u.user_id
+             JOIN classes c ON a.class_id = c.class_id
+             JOIN subjects sub ON a.subject_id = sub.subject_id
+             WHERE a.teacher_id = $1 AND (s.resubmission_requested = true OR s.recheck_requested = true)
+             ORDER BY s.submitted_at DESC`,
+            [teacher_id]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Get Requests Error:", err);
+        res.status(500).json({ error: "Server Error" });
+    }
+};
+
+// ==========================================
+// RESOLVE REQUEST
+// ==========================================
+const resolveRequest = async (req, res) => {
+    try {
+        const { submission_id } = req.params;
+        const { action } = req.body; 
+        const teacher_id = req.user.id;
+
+        // Verify auth
+        const check = await pool.query(
+            `SELECT s.submission_id FROM submissions s JOIN assignments a ON s.assignment_id = a.assignment_id WHERE s.submission_id = $1 AND a.teacher_id = $2`, [submission_id, teacher_id]
+        );
+        if(check.rows.length === 0) return res.status(403).json({error: "Unauthorized"});
+
+        if (action === 'APPROVE_RESUBMISSION') {
+            await pool.query('DELETE FROM submissions WHERE submission_id = $1', [submission_id]);
+            return res.json({ message: "Resubmission approved. Student can upload again." });
+        } else if (action === 'REJECT_RESUBMISSION') {
+            await pool.query('UPDATE submissions SET resubmission_requested = false, request_reason = NULL WHERE submission_id = $1', [submission_id]);
+            return res.json({ message: "Resubmission rejected." });
+        } else if (action === 'RESOLVE_RECHECK') {
+            await pool.query('UPDATE submissions SET recheck_requested = false, request_reason = NULL WHERE submission_id = $1', [submission_id]);
+            return res.json({ message: "Recheck resolved/rejected." });
+        }
+        res.status(400).json({ error: "Invalid action" });
+    } catch (err) {
+        console.error("Resolve Request Error:", err);
+        res.status(500).json({ error: "Server Error" });
+    }
+};
+
 module.exports = { 
     getTeacherAllocations, createAssignment, getTeacherAssignments,
     getSubmissionStats, getSubmissionsForAssignment, updateSubmissionGrade,
-    getSubmissionDetails, getStudentsByClass
+    getSubmissionDetails, getStudentsByClass, toggleSubmissionStatus,
+    updateAssignment, deleteAssignment, resetSubmission, getTeacherRequests, resolveRequest
 };

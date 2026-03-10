@@ -1,6 +1,6 @@
 'use client';
 
-import { BookOpen, CheckCircle, Award, LogOut } from 'lucide-react';
+import { BookOpen, CheckCircle, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function Sidebar({ activeTab, setActiveTab }) {
@@ -14,7 +14,6 @@ export default function Sidebar({ activeTab, setActiveTab }) {
   const menuItems = [
     { id: 'pending', label: 'Pending Tasks', icon: BookOpen },
     { id: 'history', label: 'Submission History', icon: CheckCircle },
-    { id: 'results', label: 'My Results', icon: Award }, // Added Results here!
   ];
 
   return (

@@ -3,7 +3,6 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 
-// 🔴 THIS IS THE FIX: Importing the AI Service function
 const { generateFaceEmbedding } = require('../services/aiService');
 
 const lookupUser = async (req, res) => {

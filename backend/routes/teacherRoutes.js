@@ -13,7 +13,13 @@ const {
     getSubmissionsForAssignment,
     updateSubmissionGrade,
     getSubmissionDetails,
-    getStudentsByClass
+    getStudentsByClass,
+    toggleSubmissionStatus,
+    updateAssignment,
+    deleteAssignment,
+    resetSubmission,
+    getTeacherRequests,
+    resolveRequest
 } = require('../controllers/teacherController');
 
 // 🔴 APPLIED MIDDLEWARE: Added verifyToken and checkRole(['TEACHER']) to all routes
@@ -34,5 +40,11 @@ router.get('/assignments/:assignment_id/submissions', verifyToken, checkRole(['T
 router.put('/submissions/:submission_id/grade', verifyToken, checkRole(['TEACHER']), updateSubmissionGrade);
 router.get('/submissions/:submission_id/details', verifyToken, checkRole(['TEACHER']), getSubmissionDetails);
 router.get('/classes/:class_id/students', verifyToken, checkRole(['TEACHER']), getStudentsByClass);
+router.put('/assignments/:assignment_id/toggle-status', verifyToken, checkRole(['TEACHER']), toggleSubmissionStatus);
+router.put('/assignments/:assignment_id', verifyToken, checkRole(['TEACHER']), updateAssignment);
+router.delete('/assignments/:assignment_id', verifyToken, checkRole(['TEACHER']), deleteAssignment);
+router.delete('/submissions/:submission_id/reset', verifyToken, checkRole(['TEACHER']), resetSubmission);
+router.get('/requests', verifyToken, checkRole(['TEACHER']), getTeacherRequests);
+router.put('/requests/:submission_id/resolve', verifyToken, checkRole(['TEACHER']), resolveRequest);
 
 module.exports = router;

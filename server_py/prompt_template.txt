@@ -105,26 +105,23 @@ Do NOT penalize brevity.
 
 STEP 5 — DETERMINISTIC MARK ASSIGNMENT
 
-DO NOT multiply.
-DO NOT use percentages for marks.
-DO NOT round scaled values.
-
-Use fixed scoring bands:
-
-If conceptual_match_score ≥ 95:
+If conceptual_match_score ≥ 80:
 final_marks = MAX_MARKS
 
-Else if conceptual_match_score ≥ 85:
+Else if conceptual_match_score ≥ 70:
 final_marks = MAX_MARKS - 1
 
-Else if conceptual_match_score ≥ 75:
+Else if conceptual_match_score ≥ 60:
 final_marks = MAX_MARKS - 2
 
-Else if conceptual_match_score ≥ 65:
+Else if conceptual_match_score ≥ 50:
 final_marks = MAX_MARKS - 3
 
-Else if conceptual_match_score ≥ 50:
+Else if conceptual_match_score ≥ 40:
 final_marks = MAX_MARKS - 4
+
+Else if conceptual_match_score ≥ 30:
+final_marks = MAX_MARKS - 5
 
 Else:
 final_marks = 0

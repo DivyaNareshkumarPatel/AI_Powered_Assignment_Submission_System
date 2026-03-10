@@ -1,6 +1,6 @@
 'use client';
 
-import { Users, Upload, CheckCircle, LogOut } from 'lucide-react';
+import { Users, Upload, CheckCircle, Bell, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function Sidebar({ activeTab, setActiveTab }) {
@@ -17,6 +17,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
     { id: 'students', label: 'Assignment Archive', icon: Users },
     { id: 'upload', label: 'Deploy Assignment', icon: Upload },
     { id: 'submissions', label: 'Review Work', icon: CheckCircle },
+    { id: 'requests', label: 'Student Requests', icon: Bell }, // 🔴 Added Requests Tab
   ];
 
   return (

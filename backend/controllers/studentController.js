@@ -26,7 +26,8 @@ const getPendingAssignments = async (req, res) => {
              JOIN semesters sem ON c.semester_id = sem.semester_id
              JOIN academic_years ay ON sem.academic_year_id = ay.academic_year_id
              WHERE a.class_id = $1
-             AND ay.start_date <= CURRENT_DATE 
+             AND ay.start_date <= CURRENT_DATE
+             AND a.is_accepting_submissions = true 
              AND a.assignment_id NOT IN (
                  SELECT assignment_id FROM submissions WHERE student_id = $2
              )
@@ -306,4 +307,25 @@ const finalizeViva = async (req, res) => {
     }
 };
 
-module.exports = { getPendingAssignments, getStudentHistory, submitAssignment, getStudentSubmissionDetails, continuousFaceCheck, startVivaSession, submitVivaAnswer, finalizeViva };
+// ==========================================
+// REQUEST RECHECK OR RESUBMISSION
+// ==========================================
+const submitRequest = async (req, res) => {
+    try {
+        const { submission_id } = req.params;
+        const { type, reason } = req.body; 
+        const student_id = req.user.id;
+
+        if (type === 'RESUBMISSION') {
+            await pool.query('UPDATE submissions SET resubmission_requested = true, request_reason = $1 WHERE submission_id = $2 AND student_id = $3', [reason, submission_id, student_id]);
+        } else if (type === 'RECHECK') {
+            await pool.query('UPDATE submissions SET recheck_requested = true, request_reason = $1 WHERE submission_id = $2 AND student_id = $3', [reason, submission_id, student_id]);
+        }
+        res.json({ success: true, message: "Request sent to teacher." });
+    } catch (err) {
+        console.error("Submit Request Error:", err);
+        res.status(500).json({ error: "Server error" });
+    }
+};
+
+module.exports = { getPendingAssignments, getStudentHistory, submitAssignment, getStudentSubmissionDetails, continuousFaceCheck, startVivaSession, submitVivaAnswer, finalizeViva, submitRequest };

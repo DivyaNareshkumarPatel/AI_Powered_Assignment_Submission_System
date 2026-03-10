@@ -1,4 +1,3 @@
-// src/app/dashboard/teacher/page.js
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -6,7 +5,8 @@ import Sidebar from '@/components/teacher/Sidebar';
 import ClassView from '@/components/teacher/ClassView';
 import UploadAssignment from '@/components/teacher/UploadAssignment';
 import SubmissionReview from '@/components/teacher/SubmissionReview';
-import ProtectedRoute from '@/components/ProtectedRoute'; // Import this
+import RequestsView from '@/components/teacher/RequestsView'; // 🔴 Import RequestsView
+import ProtectedRoute from '@/components/ProtectedRoute';
 import { fetchTeacherAllocations } from '@/utils/api';
 import { Loader2, AlertCircle } from 'lucide-react';
 
@@ -30,7 +30,6 @@ export default function TeacherDashboard() {
       });
   }, []);
 
-  // Internal loading state for data fetching (separate from Auth loading)
   const renderContent = () => {
     if (loading) {
       return (
@@ -67,6 +66,10 @@ export default function TeacherDashboard() {
           )}
           {activeTab === 'submissions' && (
               <SubmissionReview />
+          )}
+          {/* 🔴 Render Requests View */}
+          {activeTab === 'requests' && (
+              <RequestsView />
           )}
         </main>
       </div>

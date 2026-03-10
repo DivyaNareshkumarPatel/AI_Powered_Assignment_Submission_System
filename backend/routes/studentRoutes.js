@@ -13,7 +13,8 @@ const {
     getStudentSubmissionDetails,
     startVivaSession,
     submitVivaAnswer,
-    finalizeViva
+    finalizeViva,
+    submitRequest
 } = require('../controllers/studentController');
 
 // 🔴 FIX: Replaced 'auth' with verifyToken and checkRole(['STUDENT'])
@@ -33,5 +34,6 @@ router.post('/verify-face', verifyToken, checkRole(['STUDENT']), upload.single('
 router.post('/viva/start', verifyToken, checkRole(['STUDENT']), startVivaSession);
 router.post('/viva/answer', verifyToken, checkRole(['STUDENT']), upload.single('frame'), submitVivaAnswer); 
 router.post('/viva/finalize', verifyToken, checkRole(['STUDENT']), upload.single('video'), finalizeViva);
+router.post('/submissions/:submission_id/request', verifyToken, checkRole(['STUDENT']), submitRequest);
 
 module.exports = router;

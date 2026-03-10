@@ -4,7 +4,6 @@ import { useState } from 'react';
 import Sidebar from '@/components/student/Sidebar';
 import PendingAssignments from '@/components/student/PendingAssignments';
 import SubmissionHistory from '@/components/student/SubmissionHistory';
-import StudentResults from '@/components/student/StudentResults';
 import VivaInterface from '@/components/student/VivaInterface'; // 🔴 IMPORT NEW COMPONENT
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { X, Upload, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
@@ -76,7 +75,6 @@ export default function StudentDashboard() {
         <main className={`flex-1 min-h-screen transition-all ${activeTab !== 'viva' ? 'ml-72 p-10' : 'p-0'}`}>
           {activeTab === 'pending' && <PendingAssignments onUploadClick={handleUploadClick} />}
           {activeTab === 'history' && <SubmissionHistory />}
-          {activeTab === 'results' && <StudentResults />}
           
           {/* Render the Viva Interface */}
           {activeTab === 'viva' && (

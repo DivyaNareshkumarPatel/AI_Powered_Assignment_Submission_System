@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { fetchTeacherAssignments, fetchSubmissions, updateSubmissionGrade, fetchSubmissionDetails } from '@/utils/api';
-import { ChevronRight, Loader2, Eye, X, Save, Bot, ShieldAlert, Video, MessageSquare, CheckCircle, FolderOpen, Lock, Archive } from 'lucide-react';
+import { fetchTeacherAssignments, fetchSubmissions, updateSubmissionGrade, fetchSubmissionDetails, resetStudentSubmission } from '@/utils/api';
+import { ChevronRight, Loader2, Eye, X, Save, Bot, ShieldAlert, Video, MessageSquare, CheckCircle, FolderOpen, Lock, Archive, Search, RotateCcw } from 'lucide-react';
 import PDFViewer from '@/components/common/PDFViewer';
 
 export default function SubmissionReview() {
@@ -14,6 +14,7 @@ export default function SubmissionReview() {
   const [selectedClassId, setSelectedClassId] = useState('');
   const [selectedSubjectId, setSelectedSubjectId] = useState('');
   const [selectedAssignmentId, setSelectedAssignmentId] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   
   const [loading, setLoading] = useState(true);
   const [loadingSubmissions, setLoadingSubmissions] = useState(false);
@@ -27,6 +28,7 @@ export default function SubmissionReview() {
   const [editScore, setEditScore] = useState('');
   const [editRemarks, setEditRemarks] = useState('');
   const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false); // 🔴 New state for reset loading
 
   useEffect(() => {
     const loadData = async () => {
@@ -65,11 +67,12 @@ export default function SubmissionReview() {
   useEffect(() => { setSelectedSemester(''); setSelectedClassId(''); setSelectedSubjectId(''); setSelectedAssignmentId(''); setSubmissions([]); }, [activeTab]);
   useEffect(() => { setSelectedClassId(''); setSelectedSubjectId(''); setSelectedAssignmentId(''); setSubmissions([]); }, [selectedSemester]);
   useEffect(() => { setSelectedSubjectId(''); setSelectedAssignmentId(''); setSubmissions([]); }, [selectedClassId]);
-  useEffect(() => { setSelectedAssignmentId(''); setSubmissions([]); }, [selectedSubjectId]);
+  useEffect(() => { setSelectedAssignmentId(''); setSubmissions([]); setSearchQuery(''); }, [selectedSubjectId]);
 
   const handleAssignmentChange = async (e) => {
     const asgId = e.target.value;
     setSelectedAssignmentId(asgId);
+    setSearchQuery('');
     if (asgId) {
       setLoadingSubmissions(true);
       try {
@@ -78,6 +81,15 @@ export default function SubmissionReview() {
       } catch (err) { console.error(err); } finally { setLoadingSubmissions(false); }
     } else { setSubmissions([]); }
   };
+
+  const displayedSubmissions = useMemo(() => {
+      if (!searchQuery) return submissions;
+      const lowerQuery = searchQuery.toLowerCase();
+      return submissions.filter(s => 
+          (s.student_name && s.student_name.toLowerCase().includes(lowerQuery)) ||
+          (s.enrollment_number && s.enrollment_number.toLowerCase().includes(lowerQuery))
+      );
+  }, [submissions, searchQuery]);
 
   const openReviewModal = async (submission) => {
       setSelectedSubmission(submission);
@@ -100,6 +112,24 @@ export default function SubmissionReview() {
           setSubmissions(prev => prev.map(s => s.submission_id === selectedSubmission.submission_id ? { ...s, final_score: editScore, teacher_remarks: editRemarks, status: 'TEACHER_VERIFIED' } : s));
           setSelectedSubmission(null);
       } catch (err) { alert("Failed to save grade."); } finally { setSaving(false); }
+  };
+
+  // 🔴 NEW: Handle Reset Submission
+  const handleResetSubmission = async () => {
+      if (!window.confirm(`Are you sure you want to request a re-upload from ${selectedSubmission.student_name}?\n\nThis will permanently erase their current PDF and Viva score, and send the assignment back to their pending list.`)) return;
+      
+      setResetting(true);
+      try {
+          await resetStudentSubmission(selectedSubmission.submission_id);
+          // Remove the submission from the local state list immediately
+          setSubmissions(prev => prev.filter(s => s.submission_id !== selectedSubmission.submission_id));
+          setSelectedSubmission(null); // Close the modal
+      } catch (err) {
+          alert("Failed to reset the submission.");
+          console.error(err);
+      } finally {
+          setResetting(false);
+      }
   };
 
   const isReadOnly = activeTab === 'PAST';
@@ -147,8 +177,21 @@ export default function SubmissionReview() {
                 </select>
             </div>
 
-            {/* Table */}
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+            {/* Table Area */}
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
+                {submissions.length > 0 && (
+                    <div className="p-4 border-b border-slate-200 bg-slate-50/50">
+                        <div className="relative max-w-md">
+                            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                            <input 
+                                type="text" placeholder="Search by student name or enrollment number..." 
+                                value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm font-medium focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all bg-white"
+                            />
+                        </div>
+                    </div>
+                )}
+
                 {loadingSubmissions ? (
                     <div className="py-20 flex justify-center"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>
                 ) : submissions.length > 0 ? (
@@ -163,24 +206,27 @@ export default function SubmissionReview() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {submissions.map((s) => (
-                            <tr key={s.submission_id} className="hover:bg-slate-50 transition-colors">
-                                <td className="p-4 pl-6">
-                                    <div className="font-bold text-slate-900">{s.student_name}</div>
-                                    <div className="text-xs font-medium text-slate-500 mt-0.5">{s.enrollment_number}</div>
-                                </td>
-                                <td className="p-4 text-center"><StatusBadge status={s.status} /></td>
-                                <td className="p-4 text-center">
-                                    {/* Appended % to the Final Score */}
-                                    <span className={`text-lg font-bold ${s.final_score ? 'text-slate-900' : 'text-slate-300'}`}>{s.final_score ? `${s.final_score}%` : '-'}</span>
-                                </td>
-                                <td className="p-4 text-right pr-6">
-                                    <button onClick={() => openReviewModal(s)} className="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-colors shadow-sm">
-                                        {isReadOnly ? <Eye size={14}/> : 'Review'} <ChevronRight size={14} />
-                                    </button>
-                                </td>
-                            </tr>
-                            ))}
+                            {displayedSubmissions.length > 0 ? (
+                                displayedSubmissions.map((s) => (
+                                <tr key={s.submission_id} className="hover:bg-slate-50 transition-colors">
+                                    <td className="p-4 pl-6">
+                                        <div className="font-bold text-slate-900">{s.student_name}</div>
+                                        <div className="text-xs font-medium text-slate-500 mt-0.5">{s.enrollment_number}</div>
+                                    </td>
+                                    <td className="p-4 text-center"><StatusBadge status={s.status} /></td>
+                                    <td className="p-4 text-center">
+                                        <span className={`text-lg font-bold ${s.final_score ? 'text-slate-900' : 'text-slate-300'}`}>{s.final_score ? `${s.final_score}%` : '-'}</span>
+                                    </td>
+                                    <td className="p-4 text-right pr-6">
+                                        <button onClick={() => openReviewModal(s)} className="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-colors shadow-sm">
+                                            {isReadOnly ? <Eye size={14}/> : 'Review'} <ChevronRight size={14} />
+                                        </button>
+                                    </td>
+                                </tr>
+                                ))
+                            ) : (
+                                <tr><td colSpan="4" className="py-10 text-center text-slate-500 font-medium">No students matched your search "<strong>{searchQuery}</strong>"</td></tr>
+                            )}
                         </tbody>
                     </table>
                 </div>
@@ -267,7 +313,6 @@ export default function SubmissionReview() {
                                                     try { aiEval = JSON.parse(aiEval); } catch(e) {}
                                                 }
 
-                                                // Calculate individual question percentage safely
                                                 const score = aiEval?.score || 0;
                                                 const maxMarks = aiEval?.max_marks || 10;
                                                 const questionPercentage = Math.round((score / maxMarks) * 100);
@@ -275,18 +320,15 @@ export default function SubmissionReview() {
                                                 return (
                                                 <div key={i} className="bg-slate-50 p-5 rounded-2xl border border-slate-200 relative">
                                                     
-                                                    {/* Score Badge */}
                                                     <div className="absolute top-5 right-5 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm flex flex-col items-center min-w-[60px]">
                                                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Score</span>
                                                         <span className="text-sm font-black text-blue-600">{questionPercentage}%</span>
                                                     </div>
 
-                                                    {/* The Question */}
                                                     <h5 className="font-bold text-slate-900 mb-3 text-sm leading-relaxed pr-16">
                                                         <span className="text-blue-600 mr-2">Q{i+1}.</span>{log.question_text}
                                                     </h5>
                                                     
-                                                    {/* Student's Answer */}
                                                     <div className="mb-4 pl-6 border-l-2 border-slate-300">
                                                         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 block">Student's Answer</span>
                                                         <p className="text-sm font-medium text-slate-700 bg-white p-3 rounded-xl border border-slate-100 shadow-sm italic">
@@ -294,7 +336,6 @@ export default function SubmissionReview() {
                                                         </p>
                                                     </div>
                                                     
-                                                    {/* AI Evaluation */}
                                                     {aiEval && (
                                                         <div className="pl-6 border-l-2 border-indigo-200">
                                                             <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 mb-1 flex items-center gap-1">
@@ -320,13 +361,26 @@ export default function SubmissionReview() {
                     </div>
 
                     {/* Footer */}
-                    <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-                        <button onClick={() => setSelectedSubmission(null)} className="px-6 py-2.5 text-slate-600 font-semibold hover:bg-slate-200 rounded-lg transition-colors text-sm">Close</button>
-                        {!isReadOnly && modalTab === 'grading' && (
-                            <button onClick={handleSaveGrade} disabled={saving} className="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-70 shadow-sm text-sm">
-                                {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />} Save Grade
-                            </button>
-                        )}
+                    <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-between items-center gap-3">
+                        
+                        {/* 🔴 NEW: Reset Button on the left side of the footer */}
+                        <div>
+                            {!isReadOnly && modalTab === 'grading' && (
+                                <button onClick={handleResetSubmission} disabled={resetting} className="px-5 py-2.5 bg-red-50 text-red-600 font-bold rounded-lg hover:bg-red-100 transition-colors flex items-center gap-2 border border-red-200 shadow-sm text-sm">
+                                    {resetting ? <Loader2 className="animate-spin" size={16} /> : <RotateCcw size={16} />} Request Re-upload
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="flex gap-2">
+                            <button onClick={() => setSelectedSubmission(null)} className="px-6 py-2.5 text-slate-600 font-semibold hover:bg-slate-200 rounded-lg transition-colors text-sm">Close</button>
+                            {!isReadOnly && modalTab === 'grading' && (
+                                <button onClick={handleSaveGrade} disabled={saving} className="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-70 shadow-sm text-sm">
+                                    {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />} Save Grade
+                                </button>
+                            )}
+                        </div>
+
                     </div>
                 </div>
             </div>

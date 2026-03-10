@@ -387,4 +387,42 @@ export const finalizeVivaSession = async (formData) => {
     return response.data;
 };
 
+export const toggleAssignmentStatus = async (assignmentId, isAccepting) => {
+    const res = await api.put(`/teacher/assignments/${assignmentId}/toggle-status`, { is_accepting: isAccepting });
+    return res.data;
+};
+
+// Update an assignment
+export const updateAssignment = async (assignmentId, data) => {
+    const res = await api.put(`/teacher/assignments/${assignmentId}`, data);
+    return res.data;
+};
+
+// Delete an assignment
+export const deleteAssignment = async (assignmentId) => {
+    const res = await api.delete(`/teacher/assignments/${assignmentId}`);
+    return res.data;
+};
+
+// Reset a student's submission (Request Re-upload)
+export const resetStudentSubmission = async (submissionId) => {
+    const res = await api.delete(`/teacher/submissions/${submissionId}/reset`);
+    return res.data;
+};
+
+export const submitStudentRequest = async (submissionId, data) => {
+    const res = await api.post(`/student/submissions/${submissionId}/request`, data);
+    return res.data;
+};
+
+export const fetchTeacherRequests = async () => {
+    const res = await api.get('/teacher/requests');
+    return res.data;
+};
+
+export const resolveTeacherRequest = async (submissionId, data) => {
+    const res = await api.put(`/teacher/requests/${submissionId}/resolve`, data);
+    return res.data;
+};
+
 export default api;
