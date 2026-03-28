@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { User, Lock, LogIn, Loader2 } from 'lucide-react';
 import { loginUser } from '@/utils/api';
 import { useAuth } from '@/context/AuthContext';
 
-export default function LoginPage() {
+// 1. Extract the form and state logic into a separate component
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login } = useAuth();
@@ -33,15 +34,11 @@ export default function LoginPage() {
     try {
       const data = await loginUser(enrollment, password);
       
-      // Handle potential API response structure differences
-      // Some backends return { user: {...}, token: ... } others return flat objects
       const userData = data.user || data; 
       const token = data.token;
       
-      // 1. Update Auth Context
       login(userData, token);
 
-      // 2. Dynamic Redirect based on Role
       const role = userData.role ? userData.role.toUpperCase() : 'STUDENT';
 
       if (role === 'ADMIN') {
@@ -61,6 +58,64 @@ export default function LoginPage() {
   };
 
   return (
+    <>
+      {/* Success / Error Messages */}
+      {successMsg && (
+        <div className="mb-4 p-3 bg-green-50 text-green-700 text-sm rounded-lg border border-green-100 text-center">
+          {successMsg}
+        </div>
+      )}
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100 text-center">
+          {error}
+        </div>
+      )}
+
+      <form onSubmit={handleLogin} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Enrollment Number</label>
+          <div className="relative">
+            <User className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
+            <input 
+              type="text" 
+              value={enrollment}
+              onChange={(e) => setEnrollment(e.target.value)}
+              placeholder="22012011010"
+              className="text-slate-600 w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+              required
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
+            <input 
+              type="password" 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="text-slate-600 w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+              required
+            />
+          </div>
+        </div>
+
+        <button 
+          disabled={loading}
+          className="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 rounded-lg transition flex items-center justify-center gap-2"
+        >
+          {loading ? <Loader2 className="animate-spin w-5 h-5" /> : <>Sign In <LogIn className="w-4 h-4" /></>}
+        </button>
+      </form>
+    </>
+  );
+}
+
+// 2. Wrap the extracted component in a Suspense boundary inside the main page
+export default function LoginPage() {
+  return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-md rounded-2xl shadow-xl p-8 border border-slate-100">
         
@@ -69,56 +124,10 @@ export default function LoginPage() {
           <p className="text-slate-500 mt-2">Sign in to access your dashboard</p>
         </div>
 
-        {/* Success / Error Messages */}
-        {successMsg && (
-          <div className="mb-4 p-3 bg-green-50 text-green-700 text-sm rounded-lg border border-green-100 text-center">
-            {successMsg}
-          </div>
-        )}
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100 text-center">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Enrollment Number</label>
-            <div className="relative">
-              <User className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
-              <input 
-                type="text" 
-                value={enrollment}
-                onChange={(e) => setEnrollment(e.target.value)}
-                placeholder="22012011010"
-                className="text-slate-600 w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                required
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
-              <input 
-                type="password" 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="text-slate-600 w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                required
-              />
-            </div>
-          </div>
-
-          <button 
-            disabled={loading}
-            className="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 rounded-lg transition flex items-center justify-center gap-2"
-          >
-            {loading ? <Loader2 className="animate-spin w-5 h-5" /> : <>Sign In <LogIn className="w-4 h-4" /></>}
-          </button>
-        </form>
+        {/* Suspense boundary goes here */}
+        <Suspense fallback={<div className="text-center p-4 text-slate-500 flex justify-center"><Loader2 className="animate-spin w-6 h-6" /></div>}>
+          <LoginForm />
+        </Suspense>
 
         <div className="mt-6 text-center text-sm text-slate-500">
           First time here?{' '}
