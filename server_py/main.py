@@ -182,6 +182,56 @@ async def verify_face(
 
 
 # =====================================================
+# 📝 BACKGROUND TEXT-ONLY GRADING (For Cron Job)
+# =====================================================
+
+@app.post("/grade_text")
+async def grade_text(
+    question: str = Form(...),
+    user_text: str = Form(...),
+    correct_answer: str = Form(...),
+    max_marks: int = Form(...)
+):
+    """
+    Dedicated endpoint for grading text ONLY. Bypasses face verification.
+    This is called by the Node.js background Cron Job to handle high-volume grading.
+    """
+    try:
+        # Call the Groq LLM logic directly
+        grading_result = grader.get_score(
+            question=question,
+            student_answer=user_text,
+            teacher_answer=correct_answer,
+            max_marks=max_marks
+        )
+
+        # Safety validation
+        if not isinstance(grading_result, dict):
+            raise Exception("Invalid grading response format")
+
+        return {
+            "score": grading_result.get("final_marks", 0),
+            "max_marks": grading_result.get("max_marks", max_marks),
+            "semantic_match_percentage": grading_result.get("semantic_match_percentage", 0),
+            "conceptual_match_score": grading_result.get("conceptual_match_score", 0),
+            "is_fatal_contradiction": grading_result.get("is_fatal_contradiction", False),
+            "feedback": grading_result.get("ai_feedback", "No feedback generated."),
+            "breakdown": grading_result # Send the full breakdown back to Node
+        }
+
+    except Exception as e:
+        print(f"Background Grading Error: {e}")
+        return {
+            "score": 0,
+            "max_marks": max_marks,
+            "semantic_match_percentage": 0,
+            "conceptual_match_score": 0,
+            "is_fatal_contradiction": False,
+            "feedback": f"Grading error: {str(e)}",
+            "breakdown": {}
+        }
+
+# =====================================================
 # 🚀 SERVER START
 # =====================================================
 
