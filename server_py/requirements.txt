@@ -4,7 +4,8 @@ python-multipart
 pymupdf
 opencv-python
 # numpy
-tensorflow-cpu
+# tensorflow-cpu
+tenserflow
 numpy<2.0.0
 deepface
 python-dotenv
