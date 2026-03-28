@@ -58,4 +58,24 @@ const evaluateVivaAnswer = async (question, userText, correctAnswer, storedEmbed
     }
 };
 
-module.exports = { generateFaceEmbedding, parseAssignmentPDF, verifyStudentFace, evaluateVivaAnswer };
+const evaluateTextOnly = async (question, userText, correctAnswer, maxMarks = 10) => {
+    try {
+        const form = new FormData();
+        form.append('question', question);
+        form.append('user_text', userText || "No answer provided");
+        form.append('correct_answer', correctAnswer);
+        form.append('max_marks', maxMarks);
+
+        // Note: You will need to ensure your Python API has a /grade_text endpoint
+        // that skips face verification and only grades text using the LLM.
+        const response = await axios.post(`${PYTHON_API_URL}/grade_text`, form, {
+            headers: { ...form.getHeaders() }
+        });
+        
+        return response.data; 
+    } catch (error) {
+        throw new Error("Failed to evaluate text answer in background.");
+    }
+};
+
+module.exports = { generateFaceEmbedding, parseAssignmentPDF, verifyStudentFace, evaluateVivaAnswer, evaluateTextOnly };

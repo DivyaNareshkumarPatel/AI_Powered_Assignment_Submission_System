@@ -3,7 +3,8 @@ uvicorn
 python-multipart
 pymupdf
 opencv-python
-numpy
+# numpy
+numpy<2.0.0
 deepface
 python-dotenv
 groq

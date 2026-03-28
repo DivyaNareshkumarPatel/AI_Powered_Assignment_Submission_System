@@ -8,6 +8,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const path = require('path');
 
 require('dotenv').config();
+require('./services/cronService');
 
 const app = express();
 const PORT = process.env.PORT || 5000;

@@ -213,37 +213,35 @@ const submitVivaAnswer = async (req, res) => {
             return res.status(400).json({ error: "Missing webcam frame or face embedding" });
         }
 
+        // 1. REAL-TIME FAST TASK: Verify Face ONLY
         const imageBuffer = fs.readFileSync(file.path);
-
-        let aiEvaluation = { 
-            score: 0, 
-            feedback: "Processing...", 
-            face_status: "OK",
-            breakdown: {}
-        };
-
+        let faceStatus = "OK";
+        
         try {
-            aiEvaluation = await evaluateVivaAnswer(question, answer, correct_answer, storedEmbedding, imageBuffer, max_marks);
-        } catch (aiError) {
-            aiEvaluation.feedback = "System Error: AI failed to analyze, but your answer was successfully recorded.";
-            aiEvaluation.face_status = "ERROR";
+            const faceResult = await verifyStudentFace(storedEmbedding, imageBuffer);
+            faceStatus = faceResult.status;
+        } catch (err) {
+            faceStatus = "ERROR";
         }
 
         if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
 
-        // 🔴 UPDATED QUERY: Removed is_satisfactory and $5
+        // 2. Queue the text for background evaluation
         await pool.query(
-            `INSERT INTO viva_logs (session_id, question_text, student_answer_transcript, ai_evaluation)
-             VALUES ($1, $2, $3, $4)`,
+            `INSERT INTO viva_logs (session_id, question_text, student_answer_transcript, correct_answer, max_marks, status, ai_evaluation)
+             VALUES ($1, $2, $3, $4, $5, 'PENDING', $6)`,
             [
                 session_id, 
                 question, 
                 answer || "No answer provided", 
-                JSON.stringify(aiEvaluation)
+                correct_answer,
+                max_marks,
+                JSON.stringify({ face_status: faceStatus, feedback: "Pending AI Evaluation..." })
             ]
         );
 
-        res.json({ success: true, evaluation: aiEvaluation, faceStatus: aiEvaluation.face_status });
+        // 3. IMMEDIATELY tell the frontend to move to the next question
+        res.json({ success: true, message: "Answer recorded! Moving to next question.", faceStatus });
 
     } catch (err) {
         if (file && fs.existsSync(file.path)) fs.unlinkSync(file.path);
@@ -262,47 +260,22 @@ const finalizeViva = async (req, res) => {
     }
 
     try {
-        const logs = await pool.query(`SELECT ai_evaluation FROM viva_logs WHERE session_id = $1`, [session_id]);
-        
-        let totalScore = 0;
-        logs.rows.forEach(log => {
-            let evalData = log.ai_evaluation;
-            if (typeof evalData === 'string') {
-                try { evalData = JSON.parse(evalData); } catch(e) {}
-            }
-            totalScore += (evalData?.score || 0);
-        });
-        const averageScore = logs.rows.length > 0 ? (totalScore / logs.rows.length) : 0;
-
-        const overallFeedback = { summary: "AI Evaluation complete." };
-
-        // 🔴 FIX: Parse scores and determine if face is verified (e.g., score >= 70)
         const finalIntegrityScore = integrity_score || 100;
         const finalFaceMatchScore = face_match_score || 100;
-        const isFaceVerified = finalFaceMatchScore >= 70; // You can adjust this threshold
+        const isFaceVerified = finalFaceMatchScore >= 70;
 
-        // 🔴 FIX: Added is_face_verified = $4 to the UPDATE query
         await pool.query(
             `UPDATE viva_sessions 
-             SET ended_at = CURRENT_TIMESTAMP, 
-                 video_url = $1, 
-                 integrity_score = $2, 
-                 face_match_score = $3, 
-                 is_face_verified = $4 
+             SET ended_at = CURRENT_TIMESTAMP, video_url = $1, integrity_score = $2, face_match_score = $3, is_face_verified = $4 
              WHERE session_id = $5`, 
             [video_url, finalIntegrityScore, finalFaceMatchScore, isFaceVerified, session_id]
         );
 
-        await pool.query(
-            `INSERT INTO grading_reports (submission_id, initial_score, feedback_json) VALUES ($1, $2, $3)`,
-            [submission_id, averageScore, JSON.stringify(overallFeedback)]
-        );
+        // Set status to EVALUATING so the cron job knows it can calculate the final score once logs are done
+        await pool.query(`UPDATE submissions SET status = 'EVALUATING' WHERE submission_id = $1`, [submission_id]);
 
-        await pool.query(`UPDATE submissions SET status = 'AI_GRADED', final_score = $1 WHERE submission_id = $2`, [averageScore, submission_id]);
-
-        res.json({ success: true, final_score: averageScore });
+        res.json({ success: true, message: "Viva finalized. Evaluation is running in the background." });
     } catch (err) {
-        console.error("Finalize Viva Error:", err);
         res.status(500).json({ error: "Failed to finalize Viva" });
     }
 };
