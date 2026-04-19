@@ -5,6 +5,7 @@ import Webcam from 'react-webcam';
 import { verifyActiveFace, startVivaSession, submitVivaAnswer, finalizeVivaSession } from '@/utils/api';
 import { ShieldAlert, CheckCircle, Bot, Loader2, Send, CheckCircle2, UserCheck, Mic, MicOff, Volume2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import toast from 'react-hot-toast';
 
 export default function VivaInterface({ submissionId, onComplete }) {
     const { user } = useAuth();
@@ -47,7 +48,7 @@ export default function VivaInterface({ submissionId, onComplete }) {
                 setPhase('INITIAL_VERIFY'); 
             } catch (err) {
                 console.error(err);
-                alert("Error initializing Viva.");
+                toast.error("Error initializing Viva.");
                 onComplete();
             }
         };
@@ -117,7 +118,7 @@ export default function VivaInterface({ submissionId, onComplete }) {
     const toggleListening = () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            alert("Browser not supported.");
+            toast.error("Browser not supported.");
             return;
         }
 
@@ -244,7 +245,7 @@ export default function VivaInterface({ submissionId, onComplete }) {
     };
 
     const handleForceFail = async () => {
-        alert("Test Terminated Due to Security Violation");
+        toast.error("Test Terminated Due to Security Violation");
         setPhase('COMPLETED');
         stopRecordingAndFinalize();
     };
@@ -278,7 +279,7 @@ export default function VivaInterface({ submissionId, onComplete }) {
                 stopRecordingAndFinalize(); 
             }
         } catch (err) { 
-            alert("Failed to submit."); 
+            toast.error("Failed to submit."); 
         } finally { 
             setIsSubmittingAnswer(false); 
         }

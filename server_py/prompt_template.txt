@@ -38,9 +38,15 @@ Only explicit factual reversal counts as contradiction.
 
 Teacher answer length must NOT determine marks.
 
-If meaningful relevant content exists, minimum score = 50% of MAX_MARKS.
+If the student answer contains at least one key concept correctly and relevantly addressed, minimum conceptual_match_score = 50.
 
 Do NOT penalize just because answer is shorter than teacher answer.
+
+For numerical answers, exact calculation match is required for full marks; minor rounding differences may be acceptable if conceptually correct.
+
+For multi-part questions, evaluate each part separately and average the scores, but apply the floor rule overall.
+
+If student answer is blank, irrelevant, or contains no meaningful content, conceptual_match_score = 0.
 
 STEP 1 — EXPLANATION DETECTION
 
@@ -61,15 +67,22 @@ Assign conceptual_match_score (0–100) based on conceptual alignment:
 85–94 → Very strong and accurate
 75–84 → Strong understanding
 65–74 → Moderate understanding
-50–64 → Basic but relevant understanding
-0 → Completely irrelevant OR fully contradictory
+50–64 → Basic but relevant understanding (at least one key concept correctly addressed)
+0 → Completely irrelevant OR fully contradictory OR no meaningful content
 
 CRITICAL FLOOR RULE:
 
-If answer contains meaningful relevant content:
+If answer contains at least one key concept correctly and relevantly addressed:
 conceptual_match_score MUST be ≥ 50.
 
 Do NOT reduce score just because additional points could have been added.
+
+STEP 2.5 — FACT-CHECKING
+
+Verify factual accuracy:
+- Check for any explicit contradictions with established facts.
+- If contradictions exist, reduce conceptual_match_score by 20-50 points depending on severity.
+- If no contradictions, proceed.
 
 STEP 3 — EXACT MATCH OVERRIDE
 
@@ -95,7 +108,7 @@ Apply ONLY if:
 explanation_required = true
 AND exact_match = false
 
-If explanation is extremely shallow:
+If explanation is extremely shallow (e.g., one sentence for a complex topic):
 reduce conceptual_match_score by at most 5 points.
 
 Do NOT reduce more than 5 points.
@@ -145,6 +158,8 @@ Mention missing or weak conceptual areas clearly.
 Write 4–5 professional, objective sentences.
 
 Do NOT mention scoring logic.
+
+Focus on conceptual strengths and weaknesses, not style.
 
 FINAL OUTPUT FORMAT
 

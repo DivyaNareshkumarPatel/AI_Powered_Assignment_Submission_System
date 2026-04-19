@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { fetchTeacherAssignments, fetchSubmissions, updateSubmissionGrade, fetchSubmissionDetails, resetStudentSubmission } from '@/utils/api';
 import { ChevronRight, Loader2, Eye, X, Save, Bot, ShieldAlert, Video, MessageSquare, CheckCircle, FolderOpen, Lock, Archive, Search, RotateCcw } from 'lucide-react';
 import PDFViewer from '@/components/common/PDFViewer';
+import toast from 'react-hot-toast';
 
 export default function SubmissionReview() {
   const [allAssignments, setAllAssignments] = useState([]);
@@ -111,7 +112,7 @@ export default function SubmissionReview() {
           await updateSubmissionGrade(selectedSubmission.submission_id, editScore, editRemarks);
           setSubmissions(prev => prev.map(s => s.submission_id === selectedSubmission.submission_id ? { ...s, final_score: editScore, teacher_remarks: editRemarks, status: 'TEACHER_VERIFIED' } : s));
           setSelectedSubmission(null);
-      } catch (err) { alert("Failed to save grade."); } finally { setSaving(false); }
+      } catch (err) { toast.error("Failed to save grade."); } finally { setSaving(false); }
   };
 
   // 🔴 NEW: Handle Reset Submission
@@ -125,7 +126,7 @@ export default function SubmissionReview() {
           setSubmissions(prev => prev.filter(s => s.submission_id !== selectedSubmission.submission_id));
           setSelectedSubmission(null); // Close the modal
       } catch (err) {
-          alert("Failed to reset the submission.");
+          toast.error("Failed to reset the submission.");
           console.error(err);
       } finally {
           setResetting(false);
@@ -225,7 +226,7 @@ export default function SubmissionReview() {
                                 </tr>
                                 ))
                             ) : (
-                                <tr><td colSpan="4" className="py-10 text-center text-slate-500 font-medium">No students matched your search "<strong>{searchQuery}</strong>"</td></tr>
+                                <tr><td colSpan="4" className="py-10 text-center text-slate-500 font-medium">No students matched your search <strong>{searchQuery}</strong></td></tr>
                             )}
                         </tbody>
                     </table>
@@ -332,7 +333,7 @@ export default function SubmissionReview() {
                                                     <div className="mb-4 pl-6 border-l-2 border-slate-300">
                                                         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 block">Student's Answer</span>
                                                         <p className="text-sm font-medium text-slate-700 bg-white p-3 rounded-xl border border-slate-100 shadow-sm italic">
-                                                            "{log.student_answer_transcript || "No answer provided"}"
+                                                            {log.student_answer_transcript || "No answer provided"}
                                                         </p>
                                                     </div>
                                                     

@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const parseAssignmentPDF = require('../services/aiService').parseAssignmentPDF;
+const notificationService = require('../services/notificationService');
 
 // 1. Get Teacher's Classes (Allocations) with Academic Year Data
 const getTeacherAllocations = async (req, res) => {
@@ -46,29 +47,83 @@ const createAssignment = async (req, res) => {
         const question_url = getUrl(req.files, 'question_file');
         const solution_url = getUrl(req.files, 'solution_file');
 
-        // ==========================================
-        // PARSE THE PDF IMMEDIATELY
-        // ==========================================
-        let parsedQA = [];
-        if (req.files && req.files['solution_file']) {
-            console.log("Sending solution PDF to AI for parsing...");
-            const solutionPath = req.files['solution_file'][0].path;
-            
-            // Call Python API
-            parsedQA = await parseAssignmentPDF(solutionPath);
-            console.log(`Successfully extracted ${parsedQA.length} questions from PDF.`);
-        }
-
-        // Save Assignment AND the Parsed JSON Data to Postgres
+        // Save Assignment IMMEDIATELY (without parsing - return fast!)
         const newAssignment = await pool.query(
             `INSERT INTO assignments 
             (title, description, class_id, subject_id, teacher_id, deadline, question_file_url, solution_file_url, parsed_qa) 
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
             RETURNING *`,
-            [title, description, class_id, subject_id, teacher_id, deadline, question_url, solution_url, JSON.stringify(parsedQA)]
+            [title, description, class_id, subject_id, teacher_id, deadline, question_url, solution_url, JSON.stringify([])]
         );
 
+        // Return response to user immediately
         res.json(newAssignment.rows[0]);
+
+        // ==========================================
+        // SEND NOTIFICATIONS IN BACKGROUND (non-blocking)
+        // ==========================================
+        (async () => {
+            try {
+                console.log(`[NOTIFY] Starting notification process for class ${class_id}...`);
+                
+                // Get all students in the class
+                const classStudentsRes = await pool.query(
+                    `SELECT user_id, email, name FROM users WHERE class_id = $1 AND role = 'STUDENT' AND account_status = 'ACTIVE'`,
+                    [class_id]
+                );
+                console.log(`[NOTIFY] Found ${classStudentsRes.rows.length} students in class ${class_id}`);
+                
+                const classStudentIds = classStudentsRes.rows.map(r => r.user_id);
+
+                if (classStudentIds.length > 0) {
+                    // Get teacher name
+                    const teacherRes = await pool.query(
+                        `SELECT name FROM users WHERE user_id = $1`,
+                        [teacher_id]
+                    );
+                    const teacherName = teacherRes.rows[0]?.name || 'Your Teacher';
+                    console.log(`[NOTIFY] Teacher name: ${teacherName}`);
+                    console.log(`[NOTIFY] Sending notifications to ${classStudentIds.length} students...`);
+                    
+                    // Send notifications (both push + email)
+                    const result = await notificationService.notifyAssignmentUpload(
+                        classStudentIds,
+                        newAssignment.rows[0],
+                        teacherName
+                    );
+                    console.log(`[NOTIFY] ✅ Notification process complete. Push: ${result.sentCount}/${classStudentIds.length} sent`);
+                } else {
+                    console.log(`[NOTIFY] ⚠️ No students found in class ${class_id}`);
+                }
+            } catch (notifyError) {
+                console.error('[NOTIFY] ❌ Error sending notifications:', notifyError);
+            }
+        })();
+
+        // ==========================================
+        // PARSE PDF IN BACKGROUND (non-blocking)
+        // ==========================================
+        if (req.files && req.files['solution_file']) {
+            const assignment_id = newAssignment.rows[0].assignment_id;
+            const solutionPath = req.files['solution_file'][0].path;
+            
+            // Start parsing without awaiting
+            (async () => {
+                try {
+                    console.log(`[BG] Parsing PDF for assignment ${assignment_id}...`);
+                    const parsedQA = await parseAssignmentPDF(solutionPath);
+                    
+                    // Update assignment with parsed data
+                    await pool.query(
+                        `UPDATE assignments SET parsed_qa = $1 WHERE assignment_id = $2`,
+                        [JSON.stringify(parsedQA), assignment_id]
+                    );
+                    console.log(`[BG] Successfully extracted ${parsedQA.length} questions for assignment ${assignment_id}`);
+                } catch (parseError) {
+                    console.error(`[BG] PDF parsing failed for assignment ${assignment_id}:`, parseError.message);
+                }
+            })();
+        }
     } catch (err) {
         console.error("Assignment Creation Error:", err);
         res.status(500).send("Server Error");

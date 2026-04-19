@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { fetchStudentHistory, fetchStudentSubmissionDetails, submitStudentRequest } from '@/utils/api';
 import { CheckCircle, Search, Archive, ChevronRight, X, Video, ShieldAlert, Bot, MessageSquare } from 'lucide-react';
 import PDFViewer from '@/components/common/PDFViewer';
+import toast from 'react-hot-toast';
 
 const SubmissionHistory = () => {
     const [submissions, setSubmissions] = useState([]);
@@ -70,7 +71,7 @@ const SubmissionHistory = () => {
         setRequesting(true);
         try {
             await submitStudentRequest(selectedSubmission.submission_id, { type: requestType, reason: requestReason });
-            alert('Request sent to your teacher successfully!');
+            toast.success('Request sent to your teacher successfully!');
             
             // Update local state to show pending badge immediately
             setSelectedSubmission(prev => ({
@@ -87,7 +88,7 @@ const SubmissionHistory = () => {
             setRequestType(null);
             setRequestReason('');
         } catch(e) {
-            alert('Failed to send request');
+            toast.error('Failed to send request');
         } finally {
             setRequesting(false);
         }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { fetchTeacherAssignments, toggleAssignmentStatus, updateAssignment, deleteAssignment } from '@/utils/api';
 import { Search, FolderOpen, BookOpen, Clock, Calendar, Hash, ChevronRight, Archive, ToggleLeft, ToggleRight, Edit, Trash2, X, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const ClassView = ({ onSelectAssignment }) => {
     const [assignments, setAssignments] = useState([]);
@@ -70,7 +71,7 @@ const ClassView = ({ onSelectAssignment }) => {
             setAssignments(prev => prev.map(a => a.assignment_id === assignmentId ? { ...a, is_accepting_submissions: newStatus } : a));
             await toggleAssignmentStatus(assignmentId, newStatus);
         } catch (err) {
-            alert("Failed to change submission status.");
+            toast.error("Failed to change submission status.");
             setAssignments(prev => prev.map(a => a.assignment_id === assignmentId ? { ...a, is_accepting_submissions: currentStatus } : a));
         }
     };
@@ -91,7 +92,7 @@ const ClassView = ({ onSelectAssignment }) => {
             setAssignments(prev => prev.map(a => a.assignment_id === selectedActionAssignment.assignment_id ? { ...a, ...editForm } : a));
             setEditModalOpen(false);
         } catch (err) {
-            alert("Failed to update assignment.");
+            toast.error("Failed to update assignment.");
         } finally {
             setIsProcessing(false);
         }
@@ -104,7 +105,7 @@ const ClassView = ({ onSelectAssignment }) => {
             setAssignments(prev => prev.filter(a => a.assignment_id !== selectedActionAssignment.assignment_id));
             setDeleteModalOpen(false);
         } catch (err) {
-            alert("Failed to delete assignment. It may have existing submissions.");
+            toast.error("Failed to delete assignment. It may have existing submissions.");
         } finally {
             setIsProcessing(false);
         }
@@ -215,7 +216,7 @@ const ClassView = ({ onSelectAssignment }) => {
                             
                             <button onClick={() => {
                                     if (typeof onSelectAssignment === 'function') onSelectAssignment(assignment);
-                                    else alert("Please open the 'Review Work' tab from the sidebar to view submissions.");
+                                    else toast("Please open the 'Review Work' tab from the sidebar to view submissions.");
                                 }}
                                 className="w-full mt-6 py-3 bg-slate-50 border border-slate-200 text-slate-700 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all"
                             >
@@ -272,7 +273,7 @@ const ClassView = ({ onSelectAssignment }) => {
                             <Trash2 size={32} />
                         </div>
                         <h3 className="text-xl font-bold text-slate-900 mb-2">Delete Assignment?</h3>
-                        <p className="text-sm font-medium text-slate-500 mb-6">Are you sure you want to delete "{selectedActionAssignment?.title}"? This action cannot be undone.</p>
+                        <p className="text-sm font-medium text-slate-500 mb-6">Are you sure you want to delete {selectedActionAssignment?.title}? This action cannot be undone.</p>
                         
                         <div className="flex gap-3">
                             <button onClick={() => setDeleteModalOpen(false)} className="flex-1 py-3 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">Cancel</button>

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchTeacherRequests, resolveTeacherRequest } from '@/utils/api';
 import { Bell, CheckCircle, XCircle, Trash2, BookOpen, AlertCircle } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function RequestsView() {
     const [requests, setRequests] = useState([]);
@@ -25,7 +26,7 @@ export default function RequestsView() {
             await resolveTeacherRequest(id, { action });
             setRequests(prev => prev.filter(r => r.submission_id !== id));
         } catch (err) {
-            alert("Failed to resolve request.");
+            toast.error("Failed to resolve request.");
         } finally {
             setProcessingId(null);
         }
@@ -66,7 +67,7 @@ export default function RequestsView() {
                                     
                                     <div className="mt-4 p-4 bg-slate-50 border border-slate-100 rounded-xl">
                                         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1"><AlertCircle size={12}/> Student Reason:</p>
-                                        <p className="text-sm font-medium text-slate-700 italic">"{req.request_reason}"</p>
+                                        <p className="text-sm font-medium text-slate-700 italic">{req.request_reason}</p>
                                     </div>
                                 </div>
                                 

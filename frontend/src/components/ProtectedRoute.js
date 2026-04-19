@@ -17,7 +17,9 @@ export default function ProtectedRoute({ children, allowedRoles }) {
         router.push('/login');
       } else if (allowedRoles && !allowedRoles.includes(user.role)) {
         // Logged in but wrong role -> Redirect to their allowed dashboard
-        if (user.role === 'TEACHER') {
+        if (user.role === 'ADMIN') {
+          router.push('/dashboard/admin');
+        } else if (user.role === 'TEACHER') {
           router.push('/dashboard/teacher');
         } else {
           router.push('/dashboard/student');
