@@ -388,6 +388,11 @@ export const finalizeVivaSession = async (formData) => {
     return response.data;
 };
 
+export const cancelVivaSession = async (sessionId) => {
+    const response = await api.post('/student/viva/cancel', { session_id: sessionId });
+    return response.data;
+};
+
 export const toggleAssignmentStatus = async (assignmentId, isAccepting) => {
     const res = await api.put(`/teacher/assignments/${assignmentId}/toggle-status`, { is_accepting: isAccepting });
     return res.data;

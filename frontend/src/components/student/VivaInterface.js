@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Webcam from 'react-webcam';
-import { verifyActiveFace, startVivaSession, submitVivaAnswer, finalizeVivaSession } from '@/utils/api';
+import { verifyActiveFace, startVivaSession, cancelVivaSession, submitVivaAnswer, finalizeVivaSession } from '@/utils/api';
 import { ShieldAlert, CheckCircle, Bot, Loader2, Send, CheckCircle2, UserCheck, Mic, MicOff, Volume2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import toast from 'react-hot-toast';
@@ -14,6 +14,7 @@ export default function VivaInterface({ submissionId, onComplete }) {
     const mediaRecorderRef = useRef(null);
     const chunksRef = useRef([]);
     const pingStats = useRef({ total: 0, success: 0 });
+    const vivaStartedRef = useRef(false); // Tracks if student passed the security scan
     
     const [phase, setPhase] = useState('SETUP');
     const [faceStatus, setFaceStatus] = useState('NO_FACE');
@@ -56,12 +57,22 @@ export default function VivaInterface({ submissionId, onComplete }) {
         return () => window.speechSynthesis && window.speechSynthesis.cancel();
     }, [submissionId, phase, onComplete]);
 
+    // 1b. CLEANUP: If student leaves before passing the initial security scan, remove the empty DB entry.
+    // Using a ref (not state) avoids the stale closure problem where cleanup fires on phase transitions.
+    useEffect(() => {
+        return () => {
+            if (!vivaStartedRef.current && sessionId) {
+                cancelVivaSession(sessionId).catch(() => {});
+            }
+        };
+    }, [sessionId]);
+
     // 2. CONTINUOUS VERIFICATION
     useEffect(() => {
         if (phase !== 'INITIAL_VERIFY' && phase !== 'TEST') return;
 
         let intervalTime = phase === 'INITIAL_VERIFY' ? 2000 : 5000;
-        if (phase === 'TEST' && faceStatus !== 'OK') intervalTime = 1500;
+        if (phase === 'TEST' && faceStatus !== 'OK') intervalTime = 500;
 
         const interval = setInterval(async () => {
             if (!webcamRef.current) return;
@@ -82,6 +93,7 @@ export default function VivaInterface({ submissionId, onComplete }) {
                 }
 
                 if (phase === 'INITIAL_VERIFY' && result.face_status === 'OK') {
+                    vivaStartedRef.current = true; // Mark that the test has officially started
                     setPhase('TEST');
                 }
             } catch (err) {

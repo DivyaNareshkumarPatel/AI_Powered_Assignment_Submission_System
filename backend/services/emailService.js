@@ -184,6 +184,29 @@ const getStudentRequestEmail = (teacherName, studentName, requestType, assignmen
     `
 });
 
+const getAssignmentOpenedEmail = (studentName, assignmentTitle, teacherName) => ({
+    subject: `Assignment Opened: ${assignmentTitle}`,
+    html: `
+        <h2>Assignment Opened</h2>
+        <p>Hi ${studentName},</p>
+        <p><strong>${teacherName}</strong> is now accepting submissions again for <strong>${assignmentTitle}</strong>.</p>
+        <p>If you haven't submitted yet or need to resubmit, you can do so now.</p>
+        <p><a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/student?tab=pending" style="padding: 10px 20px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 5px;">View Assignment</a></p>
+    `
+});
+
+const getAssignmentDeadlineEmail = (studentName, assignmentTitle, teacherName, deadline) => ({
+    subject: `Deadline Approaching: ${assignmentTitle}`,
+    html: `
+        <h2>Assignment Due in 1 Day</h2>
+        <p>Hi ${studentName},</p>
+        <p>This is a reminder that the assignment <strong>${assignmentTitle}</strong> by <strong>${teacherName}</strong> is due in exactly 1 day.</p>
+        <p><strong>Deadline:</strong> ${new Date(deadline).toLocaleString()}</p>
+        <p>Please ensure you submit your work on time.</p>
+        <p><a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/student?tab=pending" style="padding: 10px 20px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 5px;">View Assignment</a></p>
+    `
+});
+
 module.exports = {
     emailTemplates,
     sendEmail,
@@ -192,5 +215,7 @@ module.exports = {
     getMarksUpdatedEmail,
     getResubmissionRequestEmail,
     getAIVerificationEmail,
-    getStudentRequestEmail
+    getStudentRequestEmail,
+    getAssignmentOpenedEmail,
+    getAssignmentDeadlineEmail
 };

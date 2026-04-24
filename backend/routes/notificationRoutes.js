@@ -7,7 +7,7 @@ const { savePushSubscription, removePushSubscription } = require('../services/no
 router.post('/subscribe', verifyToken, async (req, res) => {
     try {
         const { subscription } = req.body;
-        const userId = req.user.user_id;
+        const userId = req.user.id || req.user.user_id;
 
         if (!subscription || !subscription.endpoint) {
             return res.status(400).json({ error: 'Invalid subscription' });

@@ -146,6 +146,76 @@ class GradingAgent:
                 "ai_feedback": f"Grading failed: {str(e)}"
             }
 
+    # --------------------------------------------------
+    # EXTRACT TEXT FROM IMAGE (Using Gemini Vision)
+    # --------------------------------------------------
+    def extract_text_from_image(self, base64_image):
+        import google.generativeai as genai
+        
+        gemini_api_key = os.getenv("GEMINI_API_KEY")
+        if not gemini_api_key:
+            print("Vision API Error: GEMINI_API_KEY not found in environment.")
+            return ""
+            
+        genai.configure(api_key=gemini_api_key)
+        
+        try:
+            model = genai.GenerativeModel('gemini-flash-latest')
+            response = model.generate_content([
+                {"mime_type": "image/jpeg", "data": base64_image},
+                "Extract and transcribe all handwritten and printed text from this image exactly as it appears. Do not add any extra commentary or markdown formatting."
+            ])
+            return response.text
+        except Exception as e:
+            print(f"Vision API Error: {e}")
+            return ""
+
+    # --------------------------------------------------
+    # PARSE Q&A USING LLM
+    # --------------------------------------------------
+    def parse_qa_from_text(self, text):
+        prompt = f"""
+        You are a document parsing engine. Your job is to extract all the Question and Answer pairs from the following text.
+        Return ONLY a JSON array of objects, where each object has a 'question' key and an 'answer' key.
+        If the student only provided answers without explicitly writing out the questions, infer the question based on the context or label it as "Question 1", "Question 2", etc.
+        If you cannot find any clear questions or answers, return an empty array [].
+        Do not include any explanation or markdown formatting outside the JSON array.
+        
+        TEXT:
+        {text}
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a precise JSON parsing assistant. Always return valid JSON only."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.0
+            )
+            raw_text = response.choices[0].message.content
+            cleaned = raw_text.strip().replace("```json", "").replace("```", "")
+            
+            # Find the JSON array part
+            match = re.search(r"\[.*\]", cleaned, re.DOTALL)
+            if match:
+                data = json.loads(match.group())
+            else:
+                data = json.loads(cleaned)
+                
+            if isinstance(data, list):
+                return data
+            return []
+        except Exception as e:
+            print(f"LLM Parsing Error: {e}")
+            return []
+
 
 # Singleton instance
 grader = GradingAgent()

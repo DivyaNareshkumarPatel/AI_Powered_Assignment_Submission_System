@@ -9,7 +9,13 @@ const pool = new Pool({
     database: process.env.DB_NAME,
     ssl: {
         rejectUnauthorized: false 
-    }
+    },
+    connectionTimeoutMillis: 30000,
+    idleTimeoutMillis: 30000
+});
+
+pool.on('error', (err, client) => {
+    console.error('Unexpected error on idle client (handled automatically):', err.message);
 });
 
 pool.connect()

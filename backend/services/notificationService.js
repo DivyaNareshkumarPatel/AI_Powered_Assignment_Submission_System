@@ -167,8 +167,6 @@ const notifyAssignmentUpload = async (classStudentIds, assignment, teacherName) 
     const payload = {
         title: 'New Assignment',
         body: `${teacherFullName} uploaded "${assignment.title}" for your class`,
-        icon: '/icon-192x192.png',
-        badge: '/badge-72x72.png',
         data: {
             type: 'ASSIGNMENT_UPLOAD',
             assignment_id: assignment.assignment_id,
@@ -224,8 +222,6 @@ const notifyAssignmentClosed = async (classStudentIds, assignment, teacherName) 
     const payload = {
         title: 'Assignment Closed',
         body: `${teacherFullName} stopped accepting submissions for "${assignment.title}"`,
-        icon: '/icon-192x192.png',
-        badge: '/badge-72x72.png',
         data: {
             type: 'ASSIGNMENT_CLOSED',
             assignment_id: assignment.assignment_id
@@ -261,8 +257,6 @@ const notifyMarksUpdated = async (studentId, assignment, marks, remarks) => {
     const payload = {
         title: 'Marks Updated',
         body: `Your marks for "${assignment.title}" have been updated: ${marks}/${assignment.max_marks}`,
-        icon: '/icon-192x192.png',
-        badge: '/badge-72x72.png',
         data: {
             type: 'MARKS_UPDATED',
             assignment_id: assignment.assignment_id,
@@ -306,8 +300,6 @@ const notifyResubmissionRequest = async (studentId, assignment, teacherName, rea
     const payload = {
         title: 'Resubmission Requested',
         body: `Your teacher requested you to resubmit "${assignment.title}"`,
-        icon: '/icon-192x192.png',
-        badge: '/badge-72x72.png',
         data: {
             type: 'RESUBMISSION_REQUEST',
             assignment_id: assignment.assignment_id,
@@ -346,8 +338,6 @@ const notifyAIVerification = async (studentId, assignment, status, vivaScore, re
     const payload = {
         title: 'Assignment Verified',
         body: `Your assignment "${assignment.title}" has been verified by AI. Status: ${status}`,
-        icon: '/icon-192x192.png',
-        badge: '/badge-72x72.png',
         data: {
             type: 'AI_VERIFICATION',
             assignment_id: assignment.assignment_id,
@@ -390,8 +380,6 @@ const notifyStudentRequest = async (teacherId, studentName, requestType, assignm
     const payload = {
         title: `${studentName} Requested ${requestTypeLabel}`,
         body: `Student requested ${requestTypeLabel.toLowerCase()} for "${assignment.title}"`,
-        icon: '/icon-192x192.png',
-        badge: '/badge-72x72.png',
         data: {
             type: 'STUDENT_REQUEST',
             request_type: requestType,
@@ -426,6 +414,87 @@ const notifyStudentRequest = async (teacherId, studentName, requestType, assignm
     return pushResult;
 };
 
+// Notify assignment opened
+const notifyAssignmentOpened = async (classStudentIds, assignment, teacherName) => {
+    // Get teacher name for email
+    const teacherResult = await pool.query('SELECT name FROM users WHERE user_id = $1', [assignment.teacher_id]);
+    const teacherFullName = teacherResult.rows[0]?.name || teacherName;
+
+    // Send PUSH NOTIFICATIONS to subscribed users
+    const payload = {
+        title: 'Assignment Opened',
+        body: `${teacherFullName} is now accepting submissions for "${assignment.title}"`,
+        data: {
+            type: 'ASSIGNMENT_OPENED',
+            assignment_id: assignment.assignment_id,
+            url: '/dashboard/student?tab=pending'
+        }
+    };
+    const pushResult = await broadcastNotification(classStudentIds, payload);
+
+    // 🔥 AUTO-SEND EMAILS TO ALL STUDENTS
+    const students = await getStudentInfo(classStudentIds);
+    for (const student of students) {
+        try {
+            const emailPayload = {
+                to: student.email,
+                ...emailService.getAssignmentOpenedEmail(
+                    student.name,
+                    assignment.title,
+                    teacherFullName
+                )
+            };
+            await emailService.sendEmail(emailPayload);
+            console.log(`[EMAIL] Assignment opened email sent to ${student.email}`);
+        } catch (err) {
+            console.error(`[EMAIL] Failed to send to ${student.email}:`, err.message);
+        }
+    }
+
+    return pushResult;
+};
+
+// Notify assignment deadline approaching
+const notifyAssignmentDeadline = async (classStudentIds, assignment, teacherName) => {
+    // Get teacher name for email
+    const teacherResult = await pool.query('SELECT name FROM users WHERE user_id = $1', [assignment.teacher_id]);
+    const teacherFullName = teacherResult.rows[0]?.name || teacherName;
+
+    // Send PUSH NOTIFICATIONS to subscribed users
+    const payload = {
+        title: 'Assignment Due Tomorrow',
+        body: `Your assignment "${assignment.title}" is due in 1 day!`,
+        data: {
+            type: 'ASSIGNMENT_DEADLINE',
+            assignment_id: assignment.assignment_id,
+            url: '/dashboard/student?tab=pending'
+        }
+    };
+    const pushResult = await broadcastNotification(classStudentIds, payload);
+
+    // 🔥 AUTO-SEND EMAILS TO ALL STUDENTS
+    const students = await getStudentInfo(classStudentIds);
+    for (const student of students) {
+        try {
+            const emailPayload = {
+                to: student.email,
+                ...emailService.getAssignmentDeadlineEmail(
+                    student.name,
+                    assignment.title,
+                    teacherFullName,
+                    assignment.deadline
+                )
+            };
+            await emailService.sendEmail(emailPayload);
+            console.log(`[EMAIL] Deadline reminder email sent to ${student.email}`);
+        } catch (err) {
+            console.error(`[EMAIL] Failed to send to ${student.email}:`, err.message);
+        }
+    }
+
+    return pushResult;
+};
+
 module.exports = {
     savePushSubscription,
     removePushSubscription,
@@ -438,5 +507,7 @@ module.exports = {
     notifyMarksUpdated,
     notifyResubmissionRequest,
     notifyAIVerification,
-    notifyStudentRequest
+    notifyStudentRequest,
+    notifyAssignmentOpened,
+    notifyAssignmentDeadline
 };

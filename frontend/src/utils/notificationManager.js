@@ -1,4 +1,5 @@
 // src/utils/notificationManager.js
+import api from './api';
 
 const subscribeUserToNotifications = async () => {
   try {
@@ -18,14 +19,8 @@ const subscribeUserToNotifications = async () => {
     // Get VAPID public key from backend - with error handling
     let publicKey = '';
     try {
-      const keyResponse = await fetch('/api/notifications/vapid-key');
-      if (keyResponse.ok) {
-        const { publicKey: key } = await keyResponse.json();
-        publicKey = key;
-      } else {
-        console.warn('Backend API not ready yet, notification subscription will be retried');
-        return false;
-      }
+      const keyResponse = await api.get('/notifications/vapid-key');
+      publicKey = keyResponse.data.publicKey;
     } catch (err) {
       console.warn('Cannot connect to backend for VAPID key. Make sure backend is running and `/api/notifications` routes are added.');
       return false;
@@ -48,19 +43,7 @@ const subscribeUserToNotifications = async () => {
 
     // Send subscription to backend
     try {
-      const subResponse = await fetch('/api/notifications/subscribe', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ subscription })
-      });
-
-      if (!subResponse.ok) {
-        throw new Error('Failed to save subscription to backend');
-      }
-
+      await api.post('/notifications/subscribe', { subscription });
       console.log('Subscription saved to backend');
       return true;
     } catch (err) {
@@ -88,14 +71,11 @@ const unsubscribeUserFromNotifications = async () => {
       await subscription.unsubscribe();
 
       // Notify backend
-      await fetch('/api/notifications/unsubscribe', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ endpoint: subscription.endpoint })
-      });
+      try {
+        await api.post('/notifications/unsubscribe', { endpoint: subscription.endpoint });
+      } catch (err) {
+        console.warn('Error notifying backend of unsubscription:', err.message);
+      }
 
       console.log('User unsubscribed from push notifications');
     }

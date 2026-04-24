@@ -12,6 +12,7 @@ const {
     continuousFaceCheck,
     getStudentSubmissionDetails,
     startVivaSession,
+    cancelVivaSession,
     submitVivaAnswer,
     finalizeViva,
     submitRequest
@@ -32,6 +33,7 @@ router.post('/verify-face', verifyToken, checkRole(['STUDENT']), upload.single('
 // AI VIVA TEST ROUTES
 // ==============================
 router.post('/viva/start', verifyToken, checkRole(['STUDENT']), startVivaSession);
+router.post('/viva/cancel', verifyToken, checkRole(['STUDENT']), cancelVivaSession);
 router.post('/viva/answer', verifyToken, checkRole(['STUDENT']), upload.single('frame'), submitVivaAnswer); 
 router.post('/viva/finalize', verifyToken, checkRole(['STUDENT']), upload.single('video'), finalizeViva);
 router.post('/submissions/:submission_id/request', verifyToken, checkRole(['STUDENT']), submitRequest);

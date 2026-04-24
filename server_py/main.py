@@ -8,6 +8,7 @@ import uuid
 import uvicorn
 import re
 import json
+import base64
 from dotenv import load_dotenv
 
 # Import custom modules
@@ -129,24 +130,36 @@ async def process_pdf(file: UploadFile = File(...)):
             shutil.copyfileobj(file.file, buffer)
 
         doc = fitz.open(unique_filename)
-        raw_text = "\n".join(page.get_text() for page in doc)
+        
+        extracted_texts = []
+        for page in doc:
+            page_text = page.get_text().strip()
+            
+            # ALWAYS run Vision API. Scanned PDFs or worksheets often have mixed typed/handwritten 
+            # text or watermarks, which trick the len(page_text) < 20 check.
+            print(f"\n[OCR] Extracting text and handwriting from page via Vision API...")
+            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+            img_bytes = pix.tobytes("jpeg")
+            base64_img = base64.b64encode(img_bytes).decode('utf-8')
+            vision_text = grader.extract_text_from_image(base64_img)
+            
+            # Combine both to ensure nothing is missed
+            extracted_texts.append(f"{page_text}\n{vision_text}")
+
+        raw_text = "\n".join(extracted_texts)
         doc.close()
         os.remove(unique_filename)
 
-        pattern = r"(?is)\bQ(?:uestion)?\s*\d*[:.)-]\s*(.*?)\bA(?:nswer|ns)?\s*[:.)-]\s*(.*?)(?=\bQ(?:uestion)?\s*\d*[:.)-]|\Z)"
-        matches = re.findall(pattern, raw_text)
+        print("\n=== RAW PDF TEXT ===")
+        print(raw_text)
+        print("====================\n")
 
-        cleaned_data = []
+        # Use Groq LLM to intelligently extract Q&A pairs regardless of formatting
+        cleaned_data = grader.parse_qa_from_text(raw_text)
 
-        for q, a in matches:
-            clean_q = " ".join(q.split())
-            clean_a = " ".join(a.split())
-
-            if len(clean_q) > 3 and len(clean_a) > 2:
-                cleaned_data.append({
-                    "question": clean_q,
-                    "answer": clean_a
-                })
+        print("\n=== EXTRACTED Q&A ===")
+        print(json.dumps(cleaned_data, indent=2))
+        print("=====================\n")
 
         return cleaned_data
 

@@ -942,9 +942,9 @@ const getAllocations = async (req, res) => {
         `;
         const result = await pool.query(query);
         res.json(result.rows);
-    } catch (err) { 
+    } catch (err) {
         console.error("DATABASE ERROR:", err.message);
-        res.status(500).json({ error: err.message }); 
+        res.status(500).json({ error: err.message });
     }
 };
 
@@ -964,11 +964,11 @@ const updateAllocation = async (req, res) => {
             return res.status(404).json({ error: "Allocation not found" });
         }
         res.json(result.rows[0]);
-    } catch (err) { 
+    } catch (err) {
         if (err.code === '23505') {
             return res.status(400).json({ error: "Conflict: This teacher is already assigned to this subject/class for this year." });
         }
-        res.status(500).json({ error: err.message }); 
+        res.status(500).json({ error: err.message });
     }
 };
 
@@ -1017,9 +1017,9 @@ const generateStudentHistory = async (req, res) => {
             [semester_id]
         );
 
-        res.json({ 
-            message: "Student academic history generated successfully!", 
-            records_updated: result.rowCount 
+        res.json({
+            message: "Student academic history generated successfully!",
+            records_updated: result.rowCount
         });
 
     } catch (err) {

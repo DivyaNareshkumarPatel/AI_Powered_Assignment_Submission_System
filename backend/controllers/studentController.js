@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const fs = require('fs');
 const { parseAssignmentPDF, verifyStudentFace, evaluateVivaAnswer } = require('../services/aiService');
+const notificationService = require('../services/notificationService');
 
 const getPendingAssignments = async (req, res) => {
     const student_id = req.user.id;
@@ -82,10 +83,13 @@ const submitAssignment = async (req, res) => {
         const studentQA = await parseAssignmentPDF(studentPath);
         const actualCount = studentQA.length;
 
-        if (expectedCount > 0 && actualCount !== expectedCount) {
+        // Relaxed format checking: if the student uploads fewer questions or the AI cannot parse perfectly, 
+        // we still accept the submission (missing questions will get 0). 
+        // BUT if it extracts absolutely 0 answers, we block it to prevent starting a completely empty Viva.
+        if (actualCount === 0) {
             fs.unlinkSync(studentPath);
             return res.status(400).json({
-                error: `Format Mismatch! The teacher assigned ${expectedCount} questions, but we detected ${actualCount} answers in your PDF.`
+                error: `Unreadable Format! We could not detect any valid answers in your PDF. Please ensure your handwriting is legible or structured properly.`
             });
         }
 
@@ -249,6 +253,31 @@ const submitVivaAnswer = async (req, res) => {
     }
 };
 
+const cancelVivaSession = async (req, res) => {
+    const { session_id } = req.body;
+    try {
+        // Only delete the session if NO answers were submitted (security scan never passed)
+        const logCheck = await pool.query(
+            `SELECT COUNT(*) as count FROM viva_logs WHERE session_id = $1`,
+            [session_id]
+        );
+        const answerCount = parseInt(logCheck.rows[0].count, 10);
+
+        if (answerCount === 0) {
+            // Safe to delete — session was abandoned before any answers were given
+            await pool.query(`DELETE FROM viva_sessions WHERE session_id = $1`, [session_id]);
+            console.log(`[VIVA] Cancelled and removed empty session ${session_id}`);
+            return res.json({ success: true, message: "Session cancelled and removed." });
+        } else {
+            // Answers were already submitted, do not delete
+            return res.json({ success: false, message: "Session has answers. Not cancelled." });
+        }
+    } catch (err) {
+        console.error("Cancel Viva Session Error:", err);
+        res.status(500).json({ error: "Failed to cancel session." });
+    }
+};
+
 const finalizeViva = async (req, res) => {
     const { session_id, submission_id, integrity_score, face_match_score } = req.body;
     const file = req.file; 
@@ -294,6 +323,32 @@ const submitRequest = async (req, res) => {
         } else if (type === 'RECHECK') {
             await pool.query('UPDATE submissions SET recheck_requested = true, request_reason = $1 WHERE submission_id = $2 AND student_id = $3', [reason, submission_id, student_id]);
         }
+
+        // Send Notification in Background
+        (async () => {
+            try {
+                const infoRes = await pool.query(`
+                    SELECT a.teacher_id, a.assignment_id, a.title 
+                    FROM submissions s 
+                    JOIN assignments a ON s.assignment_id = a.assignment_id 
+                    WHERE s.submission_id = $1
+                `, [submission_id]);
+                
+                if (infoRes.rows.length > 0) {
+                    const info = infoRes.rows[0];
+                    await notificationService.notifyStudentRequest(
+                        info.teacher_id,
+                        req.user.name || 'A student',
+                        type,
+                        info,
+                        reason
+                    );
+                }
+            } catch (notifyErr) {
+                console.error('[NOTIFY] Error sending student request notification:', notifyErr);
+            }
+        })();
+
         res.json({ success: true, message: "Request sent to teacher." });
     } catch (err) {
         console.error("Submit Request Error:", err);
@@ -301,4 +356,4 @@ const submitRequest = async (req, res) => {
     }
 };
 
-module.exports = { getPendingAssignments, getStudentHistory, submitAssignment, getStudentSubmissionDetails, continuousFaceCheck, startVivaSession, submitVivaAnswer, finalizeViva, submitRequest };
+module.exports = { getPendingAssignments, getStudentHistory, submitAssignment, getStudentSubmissionDetails, continuousFaceCheck, startVivaSession, cancelVivaSession, submitVivaAnswer, finalizeViva, submitRequest };

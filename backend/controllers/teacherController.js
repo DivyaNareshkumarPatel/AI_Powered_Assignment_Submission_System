@@ -220,7 +220,27 @@ const updateSubmissionGrade = async (req, res) => {
         );
 
         if (result.rows.length === 0) return res.status(404).json({ msg: "Submission not found" });
-        res.json(result.rows[0]);
+
+        const submission = result.rows[0];
+
+        // Send notification in background
+        (async () => {
+            try {
+                const asgRes = await pool.query('SELECT * FROM assignments WHERE assignment_id = $1', [submission.assignment_id]);
+                if (asgRes.rows.length > 0) {
+                    await notificationService.notifyMarksUpdated(
+                        submission.student_id,
+                        asgRes.rows[0],
+                        submission.final_score,
+                        submission.teacher_remarks || "No remarks"
+                    );
+                }
+            } catch (err) {
+                console.error('[NOTIFY] Error sending marks updated notification:', err);
+            }
+        })();
+
+        res.json(submission);
     } catch (err) {
         console.error("Error updating grade:", err.message);
         res.status(500).send("Server Error");
@@ -262,7 +282,30 @@ const toggleSubmissionStatus = async (req, res) => {
             return res.status(404).json({ error: "Assignment not found or unauthorized" });
         }
 
-        res.json(result.rows[0]);
+        const assignment = result.rows[0];
+
+        // Send notifications in background
+        (async () => {
+            try {
+                const classStudentsRes = await pool.query(
+                    `SELECT user_id FROM users WHERE class_id = $1 AND role = 'STUDENT' AND account_status = 'ACTIVE'`,
+                    [assignment.class_id]
+                );
+                const classStudentIds = classStudentsRes.rows.map(r => r.user_id);
+                
+                if (classStudentIds.length > 0) {
+                    if (is_accepting) {
+                        await notificationService.notifyAssignmentOpened(classStudentIds, assignment, req.user.name || 'Your Teacher');
+                    } else {
+                        await notificationService.notifyAssignmentClosed(classStudentIds, assignment, req.user.name || 'Your Teacher');
+                    }
+                }
+            } catch (err) {
+                console.error('[NOTIFY] Error in toggle status notification:', err);
+            }
+        })();
+
+        res.json(assignment);
     } catch (err) {
         console.error("Toggle Status Error:", err);
         res.status(500).send("Server Error");
@@ -330,7 +373,7 @@ const resetSubmission = async (req, res) => {
 
         // Verify the teacher owns the assignment this submission belongs to
         const check = await pool.query(
-            `SELECT s.submission_id FROM submissions s
+            `SELECT s.submission_id, s.student_id, a.* FROM submissions s
              JOIN assignments a ON s.assignment_id = a.assignment_id
              WHERE s.submission_id = $1 AND a.teacher_id = $2`,
             [submission_id, teacher_id]
@@ -339,6 +382,21 @@ const resetSubmission = async (req, res) => {
         if (check.rows.length === 0) {
             return res.status(403).json({ error: "Not authorized to reset this submission." });
         }
+        const submissionInfo = check.rows[0];
+
+        // Send notification in background
+        (async () => {
+            try {
+                await notificationService.notifyResubmissionRequest(
+                    submissionInfo.student_id,
+                    submissionInfo,
+                    req.user.name || 'Your Teacher',
+                    "Your teacher has reset your submission and requested you to upload again."
+                );
+            } catch (err) {
+                console.error('[NOTIFY] Error sending resubmission request notification:', err);
+            }
+        })();
 
         // Deleting the submission automatically cascades and deletes the Viva sessions and logs
         await pool.query('DELETE FROM submissions WHERE submission_id = $1', [submission_id]);
